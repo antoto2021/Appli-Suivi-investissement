@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Investissements</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+    
+    <!-- SheetJS pour Excel Import/Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- FontAwesome pour les icônes -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Personnalisation de la scrollbar pour un look plus propre */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-800 font-sans">
+
+    <!-- Navbar -->
+    <nav class="bg-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fa-solid fa-chart-line text-blue-600 text-2xl mr-3"></i>
+                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">InvestTrack</h1>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="document.getElementById('fileInput').click()" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                        <i class="fa-solid fa-file-import"></i> <span class="hidden sm:inline">Importer Excel</span>
+                    </button>
+                    <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" onchange="handleImport(event)">
+                    
+                    <button onclick="exportToExcel()" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                        <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Exporter</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Total Investi</p>
+                        <p class="text-2xl font-bold text-gray-800" id="kpiTotal">0,00 €</p>
+                    </div>
+                    <div class="p-3 bg-blue-50 rounded-full text-blue-600">
+                        <i class="fa-solid fa-wallet text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Valeur Future Estimée</p>
+                        <p class="text-2xl font-bold text-gray-800" id="kpiFuture">0,00 €</p>
+                    </div>
+                    <div class="p-3 bg-purple-50 rounded-full text-purple-600">
+                        <i class="fa-solid fa-rocket text-xl"></i>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">Projection actuelle à terme</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Rendement Moyen</p>
+                        <p class="text-2xl font-bold text-gray-800" id="kpiReturn">0.00 %</p>
+                    </div>
+                    <div class="p-3 bg-green-50 rounded-full text-green-600">
+                        <i class="fa-solid fa-percent text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- Pie Chart -->
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Répartition par Entité</h3>
+                <div class="chart-container">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Projection Chart -->
+            <div class="bg-white p-6 rounded-xl shadow-sm flex flex-col">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 class="text-lg font-semibold text-gray-800">Projection Capital Composé</h3>
+                    <div class="flex items-center gap-2">
+                        <label for="projectionYears" class="text-sm text-gray-600">Années:</label>
+                        <input type="number" id="projectionYears" value="20" min="1" max="50" onchange="renderProjectionChart()" 
+                               class="w-16 p-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div class="chart-container flex-grow">
+                    <canvas id="projectionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Management Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Form -->
+            <div class="lg:col-span-1">
+                <div class="bg-white p-6 rounded-xl shadow-sm sticky top-24">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-pen-to-square text-blue-500"></i> <span id="formTitle">Ajouter un investissement</span>
+                    </h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Entité (ex: PEA, CTO)</label>
+                            <input type="text" id="entity" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Nom de l'entité">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Nom de l'actif</label>
+                            <input type="text" id="name" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ex: S&P 500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Date d'investissement</label>
+                            <input type="date" id="date" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Montant (€)</label>
+                                <input type="number" id="amount" step="0.01" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="0.00">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Rendement (%)</label>
+                                <input type="number" id="return" step="0.01" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="0.00">
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2 pt-2">
+                            <button id="saveBtn" onclick="saveInvestment()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition shadow-sm">
+                                <i class="fa-solid fa-plus mr-1"></i> Ajouter
+                            </button>
+                            <button onclick="resetForm()" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition">
+                                <i class="fa-solid fa-rotate-left"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-4 justify-between items-center">
+                        <h3 class="font-semibold text-gray-800">Liste des actifs</h3>
+                        <div class="relative">
+                            <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Rechercher..." 
+                                   class="pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-full focus:ring-2 focus:ring-blue-500 outline-none w-48 sm:w-64">
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left text-gray-500" id="investmentsTable">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 cursor-pointer hover:bg-gray-200 transition" onclick="sortTable(0)">Entité <i class="fa-solid fa-sort text-gray-400 ml-1"></i></th>
+                                    <th scope="col" class="px-6 py-3 cursor-pointer hover:bg-gray-200 transition" onclick="sortTable(1)">Nom <i class="fa-solid fa-sort text-gray-400 ml-1"></i></th>
+                                    <th scope="col" class="px-6 py-3 cursor-pointer hover:bg-gray-200 transition" onclick="sortTable(2)">Date <i class="fa-solid fa-sort text-gray-400 ml-1"></i></th>
+                                    <th scope="col" class="px-6 py-3 text-right cursor-pointer hover:bg-gray-200 transition" onclick="sortTable(3)">Montant <i class="fa-solid fa-sort text-gray-400 ml-1"></i></th>
+                                    <th scope="col" class="px-6 py-3 text-right cursor-pointer hover:bg-gray-200 transition" onclick="sortTable(4)">Rend. % <i class="fa-solid fa-sort text-gray-400 ml-1"></i></th>
+                                    <th scope="col" class="px-6 py-3 text-right">Val. Future</th>
+                                    <th scope="col" class="px-6 py-3 text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                <!-- Lignes générées par JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="emptyState" class="hidden p-8 text-center text-gray-400">
+                        <i class="fa-solid fa-folder-open text-4xl mb-2"></i>
+                        <p>Aucun investissement trouvé.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
+        <i class="fa-solid fa-info-circle text-blue-400"></i>
+        <span id="toastMsg">Notification</span>
+    </div>
+
+    <script>
+        // --- Configuration & Données ---
+        const msPerYear = 1000 * 60 * 60 * 24 * 365;
+        let investments = [];
+        let editingIndex = null;
+        let pieChart, projChart;
+
+        // --- Initialisation ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFromStorage();
+            if (investments.length === 0) loadDemoData();
+            updateAll();
+        });
+
+        function loadFromStorage() {
+            const stored = localStorage.getItem('investments');
+            if (stored) investments = JSON.parse(stored);
+        }
+
+        function saveLocal() {
+            localStorage.setItem('investments', JSON.stringify(investments));
+        }
+
+        function loadDemoData() {
+            investments = [
+                {entity:'PEA', name:'ETF World', date:'2023-06-15', amount:2500, return:8.5},
+                {entity:'PEA', name:'LVMH', date:'2022-01-10', amount:1200, return:12},
+                {entity:'CTO', name:'Apple', date:'2021-11-05', amount:3000, return:15},
+                {entity:'CTO', name:'Microsoft', date:'2023-02-20', amount:2800, return:14},
+                {entity:'Immo', name:'SCPI Pierre', date:'2020-05-12', amount:5000, return:4.5},
+                {entity:'Crypto', name:'Bitcoin', date:'2024-01-01', amount:1000, return:45}
+            ];
+            saveLocal();
+        }
+
+        function updateAll() {
+            renderTable();
+            renderKPIs();
+            renderPie();
+            renderProjectionChart();
+            saveLocal();
+        }
+
+        // --- CRUD Operations ---
+        function saveInvestment() {
+            const e = document.getElementById('entity').value.trim();
+            const n = document.getElementById('name').value.trim();
+            const d = document.getElementById('date').value;
+            const a = parseFloat(document.getElementById('amount').value);
+            const r = parseFloat(document.getElementById('return').value);
+
+            if (!e || !d || isNaN(a) || isNaN(r)) {
+                showToast('Veuillez remplir tous les champs correctement.', 'error');
+                return;
+            }
+
+            const newInv = { entity: e, name: n, date: d, amount: a, return: r };
+
+            if (editingIndex !== null) {
+                investments[editingIndex] = newInv;
+                editingIndex = null;
+                document.getElementById('saveBtn').innerHTML = '<i class="fa-solid fa-plus mr-1"></i> Ajouter';
+                document.getElementById('saveBtn').classList.replace('bg-green-600', 'bg-blue-600');
+                document.getElementById('saveBtn').classList.replace('hover:bg-green-700', 'hover:bg-blue-700');
+                document.getElementById('formTitle').textContent = 'Ajouter un investissement';
+                showToast('Investissement modifié avec succès !');
+            } else {
+                investments.push(newInv);
+                showToast('Investissement ajouté !');
+            }
+            
+            resetForm();
+            updateAll();
+        }
+
+        function startEdit(i) {
+            const inv = investments[i];
+            document.getElementById('entity').value = inv.entity;
+            document.getElementById('name').value = inv.name;
+            document.getElementById('date').value = inv.date;
+            document.getElementById('amount').value = inv.amount;
+            document.getElementById('return').value = inv.return;
+            
+            editingIndex = i;
+            
+            // UI Change for edit mode
+            const btn = document.getElementById('saveBtn');
+            btn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Enregistrer';
+            btn.classList.replace('bg-blue-600', 'bg-green-600');
+            btn.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
+            document.getElementById('formTitle').textContent = 'Modifier l\'investissement';
+            
+            // Scroll to form on mobile
+            if(window.innerWidth < 1024) {
+                document.getElementById('formTitle').scrollIntoView({behavior: 'smooth'});
+            }
+        }
+
+        function deleteInvestment(i) {
+            if(confirm('Voulez-vous vraiment supprimer cet investissement ?')) {
+                investments.splice(i, 1);
+                updateAll();
+                showToast('Investissement supprimé.');
+            }
+        }
+
+        function resetForm() {
+            ['entity','name','date','amount','return'].forEach(f => document.getElementById(f).value = '');
+            editingIndex = null;
+            const btn = document.getElementById('saveBtn');
+            btn.innerHTML = '<i class="fa-solid fa-plus mr-1"></i> Ajouter';
+            btn.classList.replace('bg-green-600', 'bg-blue-600');
+            btn.classList.replace('hover:bg-green-700', 'hover:bg-blue-700');
+            document.getElementById('formTitle').textContent = 'Ajouter un investissement';
+        }
+
+        // --- Table & Filter ---
+        function renderTable() {
+            const tbody = document.querySelector('#investmentsTable tbody');
+            const emptyState = document.getElementById('emptyState');
+            const filter = document.getElementById('searchInput').value.toLowerCase();
+            
+            tbody.innerHTML = '';
+            
+            let visibleCount = 0;
+            const now = new Date();
+
+            investments.forEach((inv, i) => {
+                // Filter logic
+                const textContent = `${inv.entity} ${inv.name} ${inv.date}`.toLowerCase();
+                if (filter && !textContent.includes(filter)) return;
+
+                visibleCount++;
+                const yrs = Math.max(0, (now - new Date(inv.date)) / msPerYear);
+                const future = inv.amount * Math.pow(1 + inv.return/100, yrs);
+
+                const tr = document.createElement('tr');
+                tr.className = 'bg-white border-b hover:bg-gray-50 transition';
+                tr.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-gray-900">${inv.entity}</td>
+                    <td class="px-6 py-4">${inv.name}</td>
+                    <td class="px-6 py-4 text-gray-500 text-xs">${inv.date}</td>
+                    <td class="px-6 py-4 text-right font-mono text-gray-700">${inv.amount.toLocaleString('fr-FR',{minimumFractionDigits:2})} €</td>
+                    <td class="px-6 py-4 text-right">
+                        <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded border border-blue-400">
+                            ${inv.return}%
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-right font-mono font-semibold text-green-600">${future.toLocaleString('fr-FR',{minimumFractionDigits:2})} €</td>
+                    <td class="px-6 py-4 text-center space-x-2">
+                        <button onclick="startEdit(${i})" class="text-blue-600 hover:text-blue-900 transition" title="Modifier"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteInvestment(${i})" class="text-red-500 hover:text-red-700 transition" title="Supprimer"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (visibleCount === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+            }
+        }
+
+        function filterTable() {
+            renderTable();
+        }
+
+        function sortTable(col) {
+            const keys = ['entity','name','date','amount','return'];
+            investments.sort((a,b) => {
+                let x = a[keys[col]], y = b[keys[col]];
+                if (col === 2) return new Date(x) - new Date(y);
+                if (col >= 3 && col <= 4) return x - y;
+                return x.localeCompare(y);
+            });
+            renderTable();
+        }
+
+        // --- KPIs & Charts ---
+        function renderKPIs() {
+            const now = new Date();
+            const total = investments.reduce((s, inv) => s + (inv.amount || 0), 0);
+            
+            // Calculer la valeur future "théorique" aujourd'hui (Current Value)
+            const currentValue = investments.reduce((s, inv) => {
+                const yrs = Math.max(0, (now - new Date(inv.date)) / msPerYear);
+                return s + (inv.amount * Math.pow(1 + (inv.return/100), yrs));
+            }, 0);
+
+            // Moyenne pondérée du rendement
+            let weightedReturn = 0;
+            if (total > 0) {
+                 weightedReturn = investments.reduce((s, inv) => s + (inv.return * inv.amount), 0) / total;
+            }
+
+            document.getElementById('kpiTotal').textContent = total.toLocaleString('fr-FR',{minimumFractionDigits:2}) + ' €';
+            document.getElementById('kpiFuture').textContent = currentValue.toLocaleString('fr-FR',{minimumFractionDigits:2}) + ' €';
+            document.getElementById('kpiReturn').textContent = weightedReturn.toFixed(2) + ' %';
+        }
+
+        function renderPie() {
+            const agg = {};
+            investments.forEach(i => agg[i.entity] = (agg[i.entity] || 0) + i.amount);
+            
+            const labels = Object.keys(agg);
+            const data = Object.values(agg);
+            
+            // Palette de couleurs sympa
+            const colors = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#6366F1', '#EC4899', '#14B8A6'];
+
+            const ctx = document.getElementById('pieChart').getContext('2d');
+            if (pieChart) pieChart.destroy();
+            
+            pieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: { 
+                    labels, 
+                    datasets: [{ 
+                        data,
+                        backgroundColor: colors,
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }] 
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8 } },
+                        datalabels: {
+                            color: '#fff',
+                            font: { weight: 'bold', size: 11 },
+                            formatter: (val, ctx) => {
+                                let sum = 0;
+                                let dataArr = ctx.chart.data.datasets[0].data;
+                                dataArr.map(data => { sum += data; });
+                                let percentage = (val*100 / sum).toFixed(1)+"%";
+                                // Hide if too small
+                                return (val*100 / sum) > 5 ? percentage : '';
+                            }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        function renderProjectionChart() {
+            const years = parseInt(document.getElementById('projectionYears').value) || 20;
+            const labels = Array.from({ length: years + 1 }, (_, t) => `An ${t}`);
+            
+            // Calcul: Somme de (Montant * (1+rate)^t) pour chaque année t
+            const data = labels.map((_, t) => {
+                return investments.reduce((s, inv) => {
+                    return s + inv.amount * Math.pow(1 + inv.return/100, t);
+                }, 0);
+            });
+
+            const ctx = document.getElementById('projectionChart').getContext('2d');
+            if (projChart) projChart.destroy();
+            
+            // Gradient fill
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)'); // Blue start
+            gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)'); // Blue end
+
+            projChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Valeur Totale Projetée',
+                        data,
+                        borderColor: '#3B82F6',
+                        backgroundColor: gradient,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.parsed.y.toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
+                                }
+                            }
+                        },
+                        datalabels: { display: false } // Disable datalabels on line chart
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: { borderDash: [2, 4], color: '#f3f4f6' },
+                            ticks: { callback: (val) => (val/1000).toFixed(0) + 'k€' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Import / Export Excel ---
+
+        function exportToExcel() {
+            // Créer une version "propre" pour l'export (noms de colonnes lisibles)
+            const dataToExport = investments.map(inv => ({
+                'Entité': inv.entity,
+                'Nom': inv.name,
+                'Date Investissement': inv.date,
+                'Montant (€)': inv.amount,
+                'Rendement (%)': inv.return
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            
+            // Ajuster la largeur des colonnes
+            const wscols = [
+                {wch: 20}, // Entité
+                {wch: 25}, // Nom
+                {wch: 15}, // Date
+                {wch: 15}, // Montant
+                {wch: 15}  // Rendement
+            ];
+            ws['!cols'] = wscols;
+
+            XLSX.utils.book_append_sheet(wb, ws, "Investissements");
+            XLSX.writeFile(wb, "Mes_Investissements.xlsx");
+            showToast('Export Excel réussi !');
+        }
+
+        function handleImport(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    
+                    // On prend la première feuille
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // Conversion en JSON (array of arrays pour inspecter les headers, ou raw object)
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    if(jsonData.length === 0) {
+                        showToast('Le fichier semble vide.', 'error');
+                        return;
+                    }
+
+                    // Mapping intelligent des colonnes
+                    // On cherche des clés qui ressemblent à nos données, ou on prend des défauts
+                    let count = 0;
+                    
+                    jsonData.forEach(row => {
+                        // Essayer de trouver les valeurs peu importe le nom exact de la colonne (case insensitive search)
+                        const keys = Object.keys(row);
+                        
+                        const getVal = (patterns) => {
+                            const key = keys.find(k => patterns.some(p => k.toLowerCase().includes(p)));
+                            return key ? row[key] : null;
+                        };
+
+                        const entity = getVal(['entité', 'entity', 'compte', 'support']) || 'Import';
+                        const name = getVal(['nom', 'name', 'asset', 'actif']) || 'Inconnu';
+                        
+                        // Date: Excel stocke parfois les dates en nombre. SheetJS gère souvent ça, 
+                        // mais si c'est une string, on la garde. Si non trouvé -> aujourd'hui.
+                        let dateRaw = getVal(['date', 'time']);
+                        let date = new Date().toISOString().split('T')[0]; 
+                        
+                        // Gestion basique formats date Excel
+                        if (dateRaw) {
+                            if (typeof dateRaw === 'number') {
+                                // Conversion date Excel (~1900) vers JS
+                                const d = new Date(Math.round((dateRaw - 25569)*86400*1000));
+                                date = d.toISOString().split('T')[0];
+                            } else {
+                                // Tenter de parser la string
+                                const d = new Date(dateRaw);
+                                if(!isNaN(d)) date = d.toISOString().split('T')[0];
+                            }
+                        }
+
+                        const amount = parseFloat(getVal(['montant', 'amount', 'prix', 'value'])) || 0;
+                        const ret = parseFloat(getVal(['rendement', 'return', 'yield', '%'])) || 0;
+
+                        if (amount > 0) {
+                            investments.push({
+                                entity: entity,
+                                name: name,
+                                date: date,
+                                amount: amount,
+                                return: ret
+                            });
+                            count++;
+                        }
+                    });
+
+                    updateAll();
+                    showToast(`${count} investissements importés !`);
+                } catch (err) {
+                    console.error(err);
+                    showToast('Erreur lors de la lecture du fichier.', 'error');
+                }
+                // Reset input
+                document.getElementById('fileInput').value = '';
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        // --- Toast Notification ---
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const msg = document.getElementById('toastMsg');
+            const icon = toast.querySelector('i');
+            
+            msg.textContent = message;
+            
+            if (type === 'error') {
+                icon.className = 'fa-solid fa-triangle-exclamation text-red-400';
+            } else {
+                icon.className = 'fa-solid fa-check-circle text-green-400';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
+
