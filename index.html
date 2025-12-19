@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Investissements</title>
+    <title>Dashboard Investissements V2</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -19,26 +19,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        /* Personnalisation de la scrollbar pour un look plus propre */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1; 
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1; 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8; 
-        }
-        .chart-container {
-            position: relative;
-            height: 300px;
-            width: 100%;
-        }
+        /* Personnalisation de la scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .chart-container { position: relative; height: 300px; width: 100%; }
     </style>
 </head>
 <body class="bg-gray-50 text-slate-800 font-sans">
@@ -49,7 +35,7 @@
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
                     <i class="fa-solid fa-chart-line text-blue-600 text-2xl mr-3"></i>
-                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">InvestTrack</h1>
+                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">InvestTrack <span class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full ml-2">V2</span></h1>
                 </div>
                 <div class="flex items-center space-x-2">
                     <button onclick="document.getElementById('fileInput').click()" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
@@ -59,6 +45,11 @@
                     
                     <button onclick="exportToExcel()" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
                         <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Exporter</span>
+                    </button>
+                    
+                    <!-- Bouton Reset Data pour recharger les données Excel d'origine si besoin -->
+                    <button onclick="resetToDefaultData()" class="bg-red-50 text-red-500 hover:bg-red-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2" title="Réinitialiser les données">
+                        <i class="fa-solid fa-arrows-rotate"></i>
                     </button>
                 </div>
             </div>
@@ -72,7 +63,7 @@
             <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm font-medium text-gray-500">Total Investi</p>
+                        <p class="text-sm font-medium text-gray-500">Total Investi (Cumul)</p>
                         <p class="text-2xl font-bold text-gray-800" id="kpiTotal">0,00 €</p>
                     </div>
                     <div class="p-3 bg-blue-50 rounded-full text-blue-600">
@@ -121,7 +112,7 @@
                     <h3 class="text-lg font-semibold text-gray-800">Projection Capital Composé</h3>
                     <div class="flex items-center gap-2">
                         <label for="projectionYears" class="text-sm text-gray-600">Années:</label>
-                        <input type="number" id="projectionYears" value="20" min="1" max="50" onchange="renderProjectionChart()" 
+                        <input type="number" id="projectionYears" value="30" min="1" max="50" onchange="renderProjectionChart()" 
                                class="w-16 p-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
                 </div>
@@ -181,7 +172,7 @@
             <div class="lg:col-span-2">
                 <div class="bg-white rounded-xl shadow-sm overflow-hidden">
                     <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-4 justify-between items-center">
-                        <h3 class="font-semibold text-gray-800">Liste des actifs</h3>
+                        <h3 class="font-semibold text-gray-800">Liste des actifs (2024 - 2025)</h3>
                         <div class="relative">
                             <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                             <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Rechercher..." 
@@ -231,33 +222,84 @@
 
         // --- Initialisation ---
         document.addEventListener('DOMContentLoaded', () => {
-            loadFromStorage();
-            if (investments.length === 0) loadDemoData();
+            // On essaie de charger depuis le stockage local
+            const stored = localStorage.getItem('investments');
+            if (stored) {
+                investments = JSON.parse(stored);
+            } else {
+                // Si rien dans le stockage, on charge les données du fichier Excel (Real Data)
+                loadRealData();
+            }
             updateAll();
         });
 
-        function loadFromStorage() {
-            const stored = localStorage.getItem('investments');
-            if (stored) investments = JSON.parse(stored);
+        // Fonction pour recharger les données "Hardcodées" si l'utilisateur veut reset
+        function resetToDefaultData() {
+            if(confirm("Attention: Cela va effacer vos modifications et recharger les données originales du fichier Excel. Continuer ?")) {
+                loadRealData();
+                updateAll();
+                showToast('Données réinitialisées !');
+            }
+        }
+
+        function loadRealData() {
+            // Intégration des données réelles issues du fichier Excel fourni
+            investments = [
+                // 2024 - Historique
+                {entity:'Castor Vinci', name:'Action Vinci', date:'2024-01-31', amount:1403.00, return:8.0},
+                {entity:'Castor Vinci', name:'Action Vinci', date:'2024-03-01', amount:951.50, return:8.0},
+                {entity:'Castor Vinci', name:'Action Vinci', date:'2024-03-01', amount:1903.00, return:8.0},
+                {entity:'CTO bourse', name:'Accor', date:'2024-11-12', amount:120.79, return:8.0},
+                {entity:'CTO bourse', name:'Total Energie', date:'2024-11-12', amount:150.80, return:8.0}, // Achat conservé pour l'historique
+                {entity:'CTO bourse', name:'S&P 500', date:'2024-11-12', amount:221.20, return:8.0},
+                {entity:'CTO bourse', name:'Neurones', date:'2024-12-04', amount:201.83, return:8.0},
+                {entity:'CTO bourse', name:'Mercedes', date:'2024-12-04', amount:85.57, return:8.0},
+                {entity:'CTO bourse', name:'Rocket Lab', date:'2024-12-04', amount:98.55, return:8.0},
+                {entity:'CTO bourse', name:'S&P 500', date:'2024-12-04', amount:113.49, return:8.0},
+                {entity:'CTO bourse', name:'NASDAQ 100', date:'2024-12-13', amount:501.12, return:8.0},
+                {entity:'CTO bourse', name:'S&P 500', date:'2024-12-17', amount:140.45, return:8.0},
+                
+                // 2025 - Prévisions & DCA (Gold, etc.)
+                {entity:'PEA', name:'S&P 500', date:'2025-02-06', amount:0, return:8.0}, // Montant 0 dans fichier, conservé
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-03-03', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-03-17', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'NASDAQ 100', date:'2025-04-01', amount:496.87, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-04-02', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Mercedes', date:'2025-04-03', amount:9.37, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-04-16', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-05-02', amount:50.00, return:8.0},
+                {entity:'Castor Vinci', name:'Action Vinci', date:'2025-05-06', amount:1120.07, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-05-16', amount:50.00, return:8.0},
+                {entity:'Castor Vinci', name:'Action Vinci', date:'2025-05-30', amount:3408.89, return:8.0},
+                {entity:'Castor Vinci', name:'Action Vinci', date:'2025-05-30', amount:879.18, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-06-02', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-06-16', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'S&P 500', date:'2025-06-18', amount:9.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-07-02', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-07-16', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-08-04', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-08-18', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-09-02', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-09-16', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-10-02', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-10-16', amount:50.00, return:8.0},
+                {entity:'La Première Brique', name:'L\'Alpesia (Obligation)', date:'2025-11-01', amount:2000.00, return:12.5},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-11-03', amount:50.00, return:8.0},
+                {entity:'CTO bourse', name:'Accor', date:'2025-11-25', amount:49.00, return:8.0},
+                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-12-02', amount:50.00, return:8.0},
+            ];
+            saveLocal();
         }
 
         function saveLocal() {
             localStorage.setItem('investments', JSON.stringify(investments));
         }
 
-        function loadDemoData() {
-            investments = [
-                {entity:'PEA', name:'ETF World', date:'2023-06-15', amount:2500, return:8.5},
-                {entity:'PEA', name:'LVMH', date:'2022-01-10', amount:1200, return:12},
-                {entity:'CTO', name:'Apple', date:'2021-11-05', amount:3000, return:15},
-                {entity:'CTO', name:'Microsoft', date:'2023-02-20', amount:2800, return:14},
-                {entity:'Immo', name:'SCPI Pierre', date:'2020-05-12', amount:5000, return:4.5},
-                {entity:'Crypto', name:'Bitcoin', date:'2024-01-01', amount:1000, return:45}
-            ];
-            saveLocal();
-        }
-
         function updateAll() {
+            // Tri par date décroissante pour voir les récents/futurs en premier ou inversement
+            // Ici on trie par date croissante (ancien -> futur)
+            investments.sort((a,b) => new Date(a.date) - new Date(b.date));
+            
             renderTable();
             renderKPIs();
             renderPie();
@@ -307,14 +349,12 @@
             
             editingIndex = i;
             
-            // UI Change for edit mode
             const btn = document.getElementById('saveBtn');
             btn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Enregistrer';
             btn.classList.replace('bg-blue-600', 'bg-green-600');
             btn.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
             document.getElementById('formTitle').textContent = 'Modifier l\'investissement';
             
-            // Scroll to form on mobile
             if(window.innerWidth < 1024) {
                 document.getElementById('formTitle').scrollIntoView({behavior: 'smooth'});
             }
@@ -350,20 +390,25 @@
             const now = new Date();
 
             investments.forEach((inv, i) => {
-                // Filter logic
                 const textContent = `${inv.entity} ${inv.name} ${inv.date}`.toLowerCase();
                 if (filter && !textContent.includes(filter)) return;
 
                 visibleCount++;
+                // Calcul Valeur Future simplifiée (Si investissement futur, yrs = 0 pour l'instant)
                 const yrs = Math.max(0, (now - new Date(inv.date)) / msPerYear);
                 const future = inv.amount * Math.pow(1 + inv.return/100, yrs);
 
                 const tr = document.createElement('tr');
                 tr.className = 'bg-white border-b hover:bg-gray-50 transition';
+                
+                // Style conditionnel pour les dates futures (prévisionnel)
+                const isFuture = new Date(inv.date) > now;
+                const dateClass = isFuture ? 'text-blue-500 italic' : 'text-gray-500';
+                
                 tr.innerHTML = `
                     <td class="px-6 py-4 font-medium text-gray-900">${inv.entity}</td>
                     <td class="px-6 py-4">${inv.name}</td>
-                    <td class="px-6 py-4 text-gray-500 text-xs">${inv.date}</td>
+                    <td class="px-6 py-4 text-xs ${dateClass}">${inv.date} ${isFuture ? '(Prévu)' : ''}</td>
                     <td class="px-6 py-4 text-right font-mono text-gray-700">${inv.amount.toLocaleString('fr-FR',{minimumFractionDigits:2})} €</td>
                     <td class="px-6 py-4 text-right">
                         <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded border border-blue-400">
@@ -379,16 +424,11 @@
                 tbody.appendChild(tr);
             });
 
-            if (visibleCount === 0) {
-                emptyState.classList.remove('hidden');
-            } else {
-                emptyState.classList.add('hidden');
-            }
+            if (visibleCount === 0) emptyState.classList.remove('hidden');
+            else emptyState.classList.add('hidden');
         }
 
-        function filterTable() {
-            renderTable();
-        }
+        function filterTable() { renderTable(); }
 
         function sortTable(col) {
             const keys = ['entity','name','date','amount','return'];
@@ -406,13 +446,12 @@
             const now = new Date();
             const total = investments.reduce((s, inv) => s + (inv.amount || 0), 0);
             
-            // Calculer la valeur future "théorique" aujourd'hui (Current Value)
+            // Calculer la valeur actuelle
             const currentValue = investments.reduce((s, inv) => {
                 const yrs = Math.max(0, (now - new Date(inv.date)) / msPerYear);
                 return s + (inv.amount * Math.pow(1 + (inv.return/100), yrs));
             }, 0);
 
-            // Moyenne pondérée du rendement
             let weightedReturn = 0;
             if (total > 0) {
                  weightedReturn = investments.reduce((s, inv) => s + (inv.return * inv.amount), 0) / total;
@@ -429,8 +468,6 @@
             
             const labels = Object.keys(agg);
             const data = Object.values(agg);
-            
-            // Palette de couleurs sympa
             const colors = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#6366F1', '#EC4899', '#14B8A6'];
 
             const ctx = document.getElementById('pieChart').getContext('2d');
@@ -457,10 +494,8 @@
                             font: { weight: 'bold', size: 11 },
                             formatter: (val, ctx) => {
                                 let sum = 0;
-                                let dataArr = ctx.chart.data.datasets[0].data;
-                                dataArr.map(data => { sum += data; });
+                                ctx.chart.data.datasets[0].data.map(data => sum += data);
                                 let percentage = (val*100 / sum).toFixed(1)+"%";
-                                // Hide if too small
                                 return (val*100 / sum) > 5 ? percentage : '';
                             }
                         }
@@ -474,9 +509,10 @@
             const years = parseInt(document.getElementById('projectionYears').value) || 20;
             const labels = Array.from({ length: years + 1 }, (_, t) => `An ${t}`);
             
-            // Calcul: Somme de (Montant * (1+rate)^t) pour chaque année t
             const data = labels.map((_, t) => {
                 return investments.reduce((s, inv) => {
+                    // Pour simplifier la projection: on considère que tout est investi aujourd'hui pour la projection long terme
+                    // Ou alors on prend la formule composée standard sur le montant initial
                     return s + inv.amount * Math.pow(1 + inv.return/100, t);
                 }, 0);
             });
@@ -484,24 +520,23 @@
             const ctx = document.getElementById('projectionChart').getContext('2d');
             if (projChart) projChart.destroy();
             
-            // Gradient fill
             const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)'); // Blue start
-            gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)'); // Blue end
+            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)'); 
+            gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)'); 
 
             projChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels,
                     datasets: [{
-                        label: 'Valeur Totale Projetée',
+                        label: 'Capital Projeté',
                         data,
                         borderColor: '#3B82F6',
                         backgroundColor: gradient,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 3,
-                        pointHoverRadius: 6
+                        pointRadius: 2,
+                        pointHoverRadius: 5
                     }]
                 },
                 options: {
@@ -517,7 +552,7 @@
                                 }
                             }
                         },
-                        datalabels: { display: false } // Disable datalabels on line chart
+                        datalabels: { display: false }
                     },
                     scales: {
                         y: {
@@ -525,147 +560,83 @@
                             grid: { borderDash: [2, 4], color: '#f3f4f6' },
                             ticks: { callback: (val) => (val/1000).toFixed(0) + 'k€' }
                         },
-                        x: {
-                            grid: { display: false }
-                        }
+                        x: { grid: { display: false } }
                     }
                 }
             });
         }
 
-        // --- Import / Export Excel ---
-
+        // --- Import / Export ---
         function exportToExcel() {
-            // Créer une version "propre" pour l'export (noms de colonnes lisibles)
             const dataToExport = investments.map(inv => ({
                 'Entité': inv.entity,
                 'Nom': inv.name,
-                'Date Investissement': inv.date,
+                'Date': inv.date,
                 'Montant (€)': inv.amount,
                 'Rendement (%)': inv.return
             }));
-
             const ws = XLSX.utils.json_to_sheet(dataToExport);
             const wb = XLSX.utils.book_new();
-            
-            // Ajuster la largeur des colonnes
-            const wscols = [
-                {wch: 20}, // Entité
-                {wch: 25}, // Nom
-                {wch: 15}, // Date
-                {wch: 15}, // Montant
-                {wch: 15}  // Rendement
-            ];
+            const wscols = [{wch: 20}, {wch: 25}, {wch: 15}, {wch: 15}, {wch: 15}];
             ws['!cols'] = wscols;
-
             XLSX.utils.book_append_sheet(wb, ws, "Investissements");
-            XLSX.writeFile(wb, "Mes_Investissements.xlsx");
+            XLSX.writeFile(wb, "Mes_Investissements_V2.xlsx");
             showToast('Export Excel réussi !');
         }
 
         function handleImport(e) {
             const file = e.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
-            
             reader.onload = function(e) {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, {type: 'array'});
-                    
-                    // On prend la première feuille
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    
-                    // Conversion en JSON (array of arrays pour inspecter les headers, ou raw object)
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                     const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-                    if(jsonData.length === 0) {
-                        showToast('Le fichier semble vide.', 'error');
-                        return;
-                    }
+                    if(jsonData.length === 0) { showToast('Fichier vide.', 'error'); return; }
 
-                    // Mapping intelligent des colonnes
-                    // On cherche des clés qui ressemblent à nos données, ou on prend des défauts
                     let count = 0;
-                    
                     jsonData.forEach(row => {
-                        // Essayer de trouver les valeurs peu importe le nom exact de la colonne (case insensitive search)
                         const keys = Object.keys(row);
-                        
                         const getVal = (patterns) => {
                             const key = keys.find(k => patterns.some(p => k.toLowerCase().includes(p)));
                             return key ? row[key] : null;
                         };
-
-                        const entity = getVal(['entité', 'entity', 'compte', 'support']) || 'Import';
-                        const name = getVal(['nom', 'name', 'asset', 'actif']) || 'Inconnu';
-                        
-                        // Date: Excel stocke parfois les dates en nombre. SheetJS gère souvent ça, 
-                        // mais si c'est une string, on la garde. Si non trouvé -> aujourd'hui.
+                        const entity = getVal(['entité', 'entity', 'compte']) || 'Import';
+                        const name = getVal(['nom', 'name', 'actif']) || 'Inconnu';
                         let dateRaw = getVal(['date', 'time']);
-                        let date = new Date().toISOString().split('T')[0]; 
-                        
-                        // Gestion basique formats date Excel
+                        let date = new Date().toISOString().split('T')[0];
                         if (dateRaw) {
-                            if (typeof dateRaw === 'number') {
-                                // Conversion date Excel (~1900) vers JS
-                                const d = new Date(Math.round((dateRaw - 25569)*86400*1000));
-                                date = d.toISOString().split('T')[0];
-                            } else {
-                                // Tenter de parser la string
-                                const d = new Date(dateRaw);
-                                if(!isNaN(d)) date = d.toISOString().split('T')[0];
-                            }
+                            if (typeof dateRaw === 'number') date = new Date(Math.round((dateRaw - 25569)*86400*1000)).toISOString().split('T')[0];
+                            else { const d = new Date(dateRaw); if(!isNaN(d)) date = d.toISOString().split('T')[0]; }
                         }
-
-                        const amount = parseFloat(getVal(['montant', 'amount', 'prix', 'value'])) || 0;
-                        const ret = parseFloat(getVal(['rendement', 'return', 'yield', '%'])) || 0;
+                        const amount = parseFloat(getVal(['montant', 'amount', 'prix'])) || 0;
+                        const ret = parseFloat(getVal(['rendement', 'return', '%'])) || 0;
 
                         if (amount > 0) {
-                            investments.push({
-                                entity: entity,
-                                name: name,
-                                date: date,
-                                amount: amount,
-                                return: ret
-                            });
+                            investments.push({ entity, name, date, amount, return: ret });
                             count++;
                         }
                     });
-
                     updateAll();
                     showToast(`${count} investissements importés !`);
-                } catch (err) {
-                    console.error(err);
-                    showToast('Erreur lors de la lecture du fichier.', 'error');
-                }
-                // Reset input
+                } catch (err) { console.error(err); showToast('Erreur lors de la lecture.', 'error'); }
                 document.getElementById('fileInput').value = '';
             };
-            
             reader.readAsArrayBuffer(file);
         }
 
-        // --- Toast Notification ---
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
             const msg = document.getElementById('toastMsg');
             const icon = toast.querySelector('i');
-            
             msg.textContent = message;
-            
-            if (type === 'error') {
-                icon.className = 'fa-solid fa-triangle-exclamation text-red-400';
-            } else {
-                icon.className = 'fa-solid fa-check-circle text-green-400';
-            }
-
+            if (type === 'error') icon.className = 'fa-solid fa-triangle-exclamation text-red-400';
+            else icon.className = 'fa-solid fa-check-circle text-green-400';
             toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => {
-                toast.classList.add('translate-y-20', 'opacity-0');
-            }, 3000);
+            setTimeout(() => { toast.classList.add('translate-y-20', 'opacity-0'); }, 3000);
         }
     </script>
 </body>
