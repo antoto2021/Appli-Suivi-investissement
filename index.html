@@ -103,7 +103,7 @@
                         <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-blue-600"></i>
                     </div>
                     <h3 class="text-xl font-bold text-gray-800 mb-2">Transactions</h3>
-                    <p class="text-gray-500 text-sm">Journal complet, Ajout, Import & Export Excel.</p>
+                    <p class="text-gray-500 text-sm">Journal complet, Édition, Import & Export Excel.</p>
                 </div>
 
                 <div onclick="showSection('projections')" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 cursor-pointer card-hover group">
@@ -272,6 +272,22 @@
                     <canvas id="mainProjectionChart"></canvas>
                 </div>
             </div>
+
+            <!-- Les graphiques manquants de la V4 sont restaurés ici -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-sm font-bold text-gray-700 mb-4">Investissement Annuel (Cashflow)</h3>
+                    <div class="chart-container">
+                        <canvas id="yearlyBarChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-sm font-bold text-gray-700 mb-4">Fréquence d'Opérations</h3>
+                    <div class="chart-container">
+                        <canvas id="frequencyChart"></canvas>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- SECTION 6: DIVIDENDES -->
@@ -411,8 +427,6 @@
                 } else if(tx.op === 'Vente') {
                     assets[tx.name].qty -= tx.qty;
                     // Sortie au PRU moyen pour simplifier le calcul de l'investi restant
-                    // Ou simplement diminuer l'investi proportionnellement
-                    // Simplification:
                     const currentPRU = assets[tx.name].invested / (assets[tx.name].qty + tx.qty); 
                     assets[tx.name].invested -= (tx.qty * currentPRU);
                 }
@@ -531,6 +545,8 @@
 
             sorted.forEach((tx, i) => {
                 const total = tx.op === 'Dividende' ? tx.price : (tx.qty * tx.price);
+                const originalIndex = transactions.indexOf(tx); // Get stable index for deletion/editing
+
                 const tr = document.createElement('tr');
                 tr.className = "bg-white border-b hover:bg-gray-50";
                 const badge = tx.op==='Achat' ? 'bg-blue-100 text-blue-800' : (tx.op==='Vente'?'bg-red-100 text-red-800':'bg-emerald-100 text-emerald-800');
@@ -544,7 +560,8 @@
                     <td class="px-4 py-3 text-right font-mono text-xs">${tx.price.toFixed(2)}</td>
                     <td class="px-4 py-3 text-right font-bold text-gray-700">${total.toFixed(2)} €</td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="deleteTx(${transactions.indexOf(tx)})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button>
+                        <button onclick="openModal('edit', ${originalIndex})" class="text-blue-500 hover:text-blue-700 mx-1" title="Éditer"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteTx(${originalIndex})" class="text-red-400 hover:text-red-600 mx-1" title="Supprimer"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -552,7 +569,6 @@
         }
 
         function renderProjections() {
-            // Simplified projection logic
             const years = parseInt(document.getElementById('projYears').value) || 20;
             const labels = Array.from({length: years+1}, (_, i) => `An ${i}`);
             
@@ -569,6 +585,43 @@
                 type: 'line',
                 data: { labels, datasets: [{ label: 'Projection (5%)', data, borderColor: '#9333ea', fill: true, backgroundColor: 'rgba(147, 51, 234, 0.1)' }] },
                 options: { maintainAspectRatio: false }
+            });
+
+            renderYearlyBar();
+            renderFrequency();
+        }
+
+        function renderYearlyBar() {
+            const yData = {};
+            transactions.filter(t=>t.op==='Achat').forEach(t => {
+                const y = t.date.split('-')[0];
+                yData[y] = (yData[y]||0) + (t.qty*t.price);
+            });
+            
+            const ctx = document.getElementById('yearlyBarChart').getContext('2d');
+            if(charts.bar) charts.bar.destroy();
+            
+            charts.bar = new Chart(ctx, {
+                type: 'bar',
+                data: { 
+                    labels: Object.keys(yData).sort(), 
+                    datasets: [{ label:'Cashflow Investi', data:Object.values(yData), backgroundColor:'#10b981', borderRadius:4 }] 
+                },
+                options: { maintainAspectRatio: false }
+            });
+        }
+
+        function renderFrequency() {
+            let count = 0;
+            const data = transactions.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(t => ++count);
+            const labels = transactions.map(t=>t.date);
+            
+            const ctx = document.getElementById('frequencyChart').getContext('2d');
+            if(charts.freq) charts.freq.destroy();
+            charts.freq = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets: [{ label:'Nombre Opérations', data, borderColor:'#6366f1', pointRadius:0 }] },
+                options: { maintainAspectRatio: false, scales: { x: { display: false } } }
             });
         }
 
@@ -604,10 +657,39 @@
         function showToast(msg) { const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; t.classList.remove('translate-y-20','opacity-0'); setTimeout(()=>t.classList.add('translate-y-20','opacity-0'),2000); }
         
         // --- FORMS & EXCEL ---
-        function openModal(m, i) { document.getElementById('modalForm').classList.remove('hidden'); }
+        function openModal(mode, idx=null) {
+            document.getElementById('modalForm').classList.remove('hidden');
+            document.getElementById('editIndex').value = idx !== null ? idx : '';
+            
+            if(mode === 'new') {
+                document.getElementById('modalTitle').textContent = 'Nouvelle Transaction';
+                document.getElementById('fDate').value = new Date().toISOString().split('T')[0];
+                document.getElementById('fOp').value = 'Achat';
+                document.getElementById('fName').value = '';
+                document.getElementById('fTicker').value = '';
+                document.getElementById('fAccount').value = '';
+                document.getElementById('fSector').value = '';
+                document.getElementById('fQty').value = '';
+                document.getElementById('fPrice').value = '';
+            } else {
+                document.getElementById('modalTitle').textContent = 'Modifier Transaction';
+                const tx = transactions[idx];
+                document.getElementById('fDate').value = tx.date;
+                document.getElementById('fOp').value = tx.op;
+                document.getElementById('fName').value = tx.name;
+                document.getElementById('fTicker').value = tx.ticker || '';
+                document.getElementById('fAccount').value = tx.account || '';
+                document.getElementById('fSector').value = tx.sector || '';
+                document.getElementById('fQty').value = tx.qty;
+                document.getElementById('fPrice').value = tx.price;
+            }
+        }
+        
         function closeModal() { document.getElementById('modalForm').classList.add('hidden'); }
+        
         function saveTransaction() {
-            transactions.push({
+            const idx = document.getElementById('editIndex').value;
+            const tx = {
                 date: document.getElementById('fDate').value,
                 op: document.getElementById('fOp').value,
                 name: document.getElementById('fName').value,
@@ -616,30 +698,50 @@
                 sector: document.getElementById('fSector').value,
                 qty: parseFloat(document.getElementById('fQty').value)||0,
                 price: parseFloat(document.getElementById('fPrice').value)||0
-            });
-            saveData(); closeModal(); showToast("Ajouté"); renderTxTable();
+            };
+            
+            if(idx !== '') {
+                transactions[idx] = tx; // Edit existing
+            } else {
+                transactions.push(tx); // Add new
+            }
+            
+            saveData(); 
+            closeModal(); 
+            showToast(idx !== '' ? "Modifié" : "Ajouté"); 
+            renderTxTable();
         }
+
         function deleteTx(i) { if(confirm('Supprimer ?')) { transactions.splice(i,1); saveData(); renderTxTable(); } }
         function exportToExcel() { const ws=XLSX.utils.json_to_sheet(transactions); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Data"); XLSX.writeFile(wb,"Invest.xlsx"); }
+        
         function handleImport(e) {
             const r=new FileReader(); r.onload=ev=>{
                 const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
                 const json=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                let count = 0;
                 json.forEach(row=>{
                     let d = row['Date']||row['Date_Entrée'];
                     if(typeof d==='number') d=new Date(Math.round((d-25569)*86400*1000)).toISOString().split('T')[0];
+                    
+                    const name = row['Nom actif'] || row['Nom_Actif'] || row['Nom'] || 'Inconnu';
+                    const op = row['Operation'] || row['Opération'] || row['Type'] || 'Achat';
+                    const price = parseFloat(row['Prix unitaire']) || parseFloat(row['Prix']) || parseFloat(row['PRU_Moyen']) || 0;
+                    const qty = parseFloat(row['Quantité']) || parseFloat(row['Qty']) || 0;
+
                     transactions.push({
                         date: d||new Date().toISOString().split('T')[0],
-                        op: row['Type']||row['Operation']||'Achat',
-                        name: row['Nom']||row['Nom_Actif']||'Inconnu',
+                        op: op,
+                        name: name,
                         ticker: row['Ticker']||'',
                         account: row['Compte']||'',
                         sector: row['Secteur']||'',
-                        qty: parseFloat(row['Quantité'])||parseFloat(row['Qty'])||0,
-                        price: parseFloat(row['Prix'])||parseFloat(row['PRU_Moyen'])||0
+                        qty: qty,
+                        price: price
                     });
+                    count++;
                 });
-                saveData(); showToast(json.length+" importés"); renderTxTable();
+                saveData(); showToast(count+" importés"); renderTxTable();
             }; r.readAsArrayBuffer(e.target.files[0]);
         }
     </script>
