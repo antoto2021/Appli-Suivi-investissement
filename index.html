@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-title" content="Suivi Investissement">
     <link rel="apple-touch-icon" href="icon.PNG">
     <link rel="icon" type="image/png" href="icon.PNG">
-    <title>Bourse 3000 🚀</title>
+    <title>Suivi Investissement</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -876,21 +876,53 @@
                 const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
                 let count = 0;
                 json.forEach(row => {
+                    // Normalisation des clés (retirer espaces et accents pour faciliter la correspondance)
+                    // Mais ici on va juste ajouter les clés spécifiques du fichier fourni
+                    
+                    // Détection Date
+                    let dateVal = row['Date_Entrée'] || row['Date'] || new Date().toISOString().split('T')[0];
+                    // Si format Excel date (nombre), conversion
+                    if(typeof dateVal === 'number') {
+                         dateVal = new Date(Math.round((dateVal - 25569)*86400*1000)).toISOString().split('T')[0];
+                    }
+
+                    // Détection Ticker (Gérer NaN)
+                    let tickerVal = row['Ticker'];
+                    if(tickerVal === 'NaN' || !tickerVal) tickerVal = '';
+
                     const tx = {
-                        date: row['Date_Entrée'] || row['Date'] || new Date().toISOString().split('T')[0],
-                        op: row['Type'] || 'Achat',
-                        name: row['Nom_Actif'] || row['Nom'] || 'Inconnu',
-                        ticker: row['Ticker'] || '',
+                        date: dateVal,
+                        op: row['Type'] || row['Operation'] || row['Opération'] || 'Achat',
+                        name: row['Nom_Actif'] || row['Nom'] || row['Nom actif'] || 'Inconnu',
+                        ticker: tickerVal,
                         account: row['Compte'] || '',
                         sector: row['Secteur'] || '',
-                        qty: parseFloat(row['Quantité']) || 0,
-                        price: parseFloat(row['PRU_Moyen']) || parseFloat(row['Prix']) || 0
+                        qty: parseFloat(row['Quantité']) || parseFloat(row['Qty']) || 0,
+                        price: parseFloat(row['PRU_Moyen']) || parseFloat(row['Prix']) || parseFloat(row['Prix unitaire']) || 0
                     };
-                    if(tx.qty > 0 || tx.price > 0) { transactions.push(tx); count++; }
+
+                    // Pour les dividendes, si le fichier contient Qty et Prix Unitaire, on calcule le total
+                    // car l'appli attend le montant TOTAL dans le champ 'price' pour les dividendes.
+                    if (tx.op === 'Dividende' && tx.qty > 0 && tx.price > 0) {
+                         // On assume que l'Excel fournit Qty * PrixU
+                         // On met le total dans price pour affichage correct
+                         tx.price = tx.qty * tx.price;
+                    }
+
+                    if(tx.qty > 0 || (tx.op === 'Dividende' && tx.price > 0)) { 
+                        transactions.push(tx); 
+                        count++; 
+                    }
                 });
                 saveTxLocal();
                 showToast(`${count} transactions importées`);
                 renderTxTable();
+                
+                // Mettre à jour les autres vues
+                updateKPIs();
+                renderPieChart();
+                renderAssetsGrid();
+                e.target.value = ''; // Reset
             };
             reader.readAsArrayBuffer(file);
         }
