@@ -323,8 +323,19 @@
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-xs font-bold text-gray-500 mb-1">Nom Actif</label><input type="text" id="fName" required class="w-full p-2 border rounded-lg"></div>
-                    <div><label class="block text-xs font-bold text-gray-500 mb-1">Ticker</label><input type="text" id="fTicker" class="w-full p-2 border rounded-lg"></div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Nom Actif</label>
+                        <input type="text" id="fName" required class="w-full p-2 border rounded-lg" placeholder="ex: Total">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Ticker</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="fTicker" class="w-full p-2 border rounded-lg" placeholder="ex: TTE.PA">
+                            <button type="button" onclick="searchTickerOnWeb()" class="bg-blue-100 text-blue-600 px-3 rounded-lg hover:bg-blue-200 transition" title="Rechercher sur Google">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div><label class="block text-xs font-bold text-gray-500 mb-1">Compte</label><input type="text" id="fAccount" class="w-full p-2 border rounded-lg"></div>
@@ -354,11 +365,64 @@
         const mockDividends = { 'Action Vinci': {current: 4.5}, 'Total Energie': {current: 3.2}, 'Accor': {current: 1.1}, 'Mercedes': {current: 5.3}, 'Neurones': {current: 1.2}, 'DEFAULT': {current: 0} };
         const tips = [ "La diversification est la seule gratuité en finance.", "L'intérêt composé est la 8ème merveille du monde.", "Le temps est votre meilleur allié.", "Achetez quand le sang coule dans les rues.", "Réinvestissez toujours vos dividendes.", "N'investissez que ce que vous pouvez perdre." ];
 
+        // --- TICKER AUTO-FILL DATABASE ---
+        const tickerMapping = {
+            // CAC 40
+            'accor': 'AC.PA', 'air liquide': 'AI.PA', 'airbus': 'AIR.PA', 'arcelormittal': 'MT.AS', 'axa': 'CS.PA',
+            'bnp paribas': 'BNP.PA', 'bouygues': 'EN.PA', 'capgemini': 'CAP.PA', 'carrefour': 'CA.PA', 'credit agricole': 'ACA.PA',
+            'danone': 'BN.PA', 'dassault systemes': 'DSY.PA', 'edenred': 'EDEN.PA', 'engie': 'ENGI.PA', 'essilor': 'EL.PA',
+            'hermes': 'RMS.PA', 'kering': 'KER.PA', 'legrand': 'LR.PA', 'l\'oreal': 'OR.PA', 'loreal': 'OR.PA',
+            'lvmh': 'MC.PA', 'michelin': 'ML.PA', 'orange': 'ORA.PA', 'pernod ricard': 'RI.PA', 'publicis': 'PUB.PA',
+            'renault': 'RNO.PA', 'safran': 'SAF.PA', 'saint gobain': 'SGO.PA', 'sanofi': 'SAN.PA', 'schneider electric': 'SU.PA',
+            'societe generale': 'GLE.PA', 'stellantis': 'STLA.PA', 'stmicroelectronics': 'STMPA.PA', 'teleperformance': 'TEP.PA',
+            'thales': 'HO.PA', 'total': 'TTE.PA', 'totalenergies': 'TTE.PA', 'total energie': 'TTE.PA', 'uniibail': 'URW.AS',
+            'veolia': 'VIE.PA', 'vinci': 'DG.PA', 'action vinci': 'DG.PA', 'vivendi': 'VIV.PA', 'worldline': 'WLN.PA',
+            // US / TECH
+            'apple': 'AAPL', 'microsoft': 'MSFT', 'google': 'GOOGL', 'alphabet': 'GOOGL', 'amazon': 'AMZN', 'tesla': 'TSLA',
+            'meta': 'META', 'facebook': 'META', 'nvidia': 'NVDA', 'netflix': 'NFLX', 'cocacola': 'KO', 'pepsi': 'PEP',
+            'mcdonalds': 'MCD', 'visa': 'V', 'mastercard': 'MA', 'disney': 'DIS', 'pfizer': 'PFE', 'johnson': 'JNJ',
+            // ETF COMMUNS
+            'cw8': 'CW8.PA', 'ewld': 'EWLD.PA', 'sp500': 'SP500', 'nasdaq': 'UST.PA', 'cac40': 'PX1.PA',
+            'ishares physical gold': 'IGLN.L', 'or': 'IGLN.L', 'gold': 'IGLN.L'
+        };
+
         // --- 2. INIT ---
         document.addEventListener('DOMContentLoaded', () => {
             loadData();
             loadDailyTip();
+            setupAutoFill();
         });
+
+        function setupAutoFill() {
+            const nameInput = document.getElementById('fName');
+            const tickerInput = document.getElementById('fTicker');
+            
+            nameInput.addEventListener('blur', () => {
+                const val = nameInput.value.toLowerCase().trim();
+                // Recherche simple
+                if (tickerMapping[val]) {
+                    tickerInput.value = tickerMapping[val];
+                    // Petit effet visuel
+                    tickerInput.classList.add('bg-green-50');
+                    setTimeout(() => tickerInput.classList.remove('bg-green-50'), 1000);
+                } else {
+                    // Recherche partielle (ex: "Total" dans "Total Energies")
+                    const foundKey = Object.keys(tickerMapping).find(k => val.includes(k));
+                    if(foundKey) {
+                        tickerInput.value = tickerMapping[foundKey];
+                    }
+                }
+            });
+        }
+
+        function searchTickerOnWeb() {
+            const name = document.getElementById('fName').value;
+            if(!name) {
+                alert("Veuillez d'abord saisir un nom d'actif.");
+                return;
+            }
+            window.open(`https://www.google.com/search?q=ticker+${encodeURIComponent(name)}`, '_blank');
+        }
 
         function showSection(id) {
             document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
@@ -572,18 +636,54 @@
             const years = parseInt(document.getElementById('projYears').value) || 20;
             const labels = Array.from({length: years+1}, (_, i) => `An ${i}`);
             
-            // Calc start capital
+            // 1. Calculer le rendement actuel réel (comme sur le dashboard)
+            const assets = calculatePortfolioState();
+            let totalInvested = 0;
+            let totalCurrentValue = 0;
+
+            Object.values(assets).forEach(a => {
+                if(a.qty < 0.001) return;
+                totalInvested += a.invested;
+                const price = currentPrices[a.name] || (a.invested / a.qty);
+                totalCurrentValue += (a.qty * price);
+            });
+
+            // Taux de croissance = Performance actuelle
+            let growthRate = 0.05; // Fallback par défaut si pas de données
+            if (totalInvested > 0) {
+                growthRate = (totalCurrentValue - totalInvested) / totalInvested;
+            }
+
+            // 2. Calcul du capital de départ (Cash investi)
             let cap = 0;
-            transactions.forEach(t => { if(t.op==='Achat') cap += t.qty*t.price; if(t.op==='Vente') cap -= t.qty*t.price; });
+            transactions.forEach(t => { 
+                if(t.op==='Achat') cap += t.qty*t.price; 
+                if(t.op==='Vente') cap -= t.qty*t.price; 
+            });
             
+            // 3. Projection
             const data = [cap];
-            for(let i=1; i<=years; i++) data.push(data[i-1] * 1.05); // 5% growth flat
+            for(let i=1; i<=years; i++) {
+                // On applique le taux de rendement calculé
+                data.push(data[i-1] * (1 + growthRate));
+            }
             
+            const rateLabel = (growthRate * 100).toFixed(2) + '%';
+
             const ctx = document.getElementById('mainProjectionChart').getContext('2d');
             if(charts.proj) charts.proj.destroy();
             charts.proj = new Chart(ctx, {
                 type: 'line',
-                data: { labels, datasets: [{ label: 'Projection (5%)', data, borderColor: '#9333ea', fill: true, backgroundColor: 'rgba(147, 51, 234, 0.1)' }] },
+                data: { 
+                    labels, 
+                    datasets: [{ 
+                        label: `Projection (Rendement appliqué : ${rateLabel})`, 
+                        data, 
+                        borderColor: '#9333ea', 
+                        fill: true, 
+                        backgroundColor: 'rgba(147, 51, 234, 0.1)' 
+                    }] 
+                },
                 options: { maintainAspectRatio: false }
             });
 
