@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-title" content="Suivi Investissement">
     <link rel="apple-touch-icon" href="icon.PNG">
     <link rel="icon" type="image/png" href="icon.PNG">
-    <title>Dashboard Investissement</title>
+    <title>Bourse 3000 🚀</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,633 +15,885 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
     
-    <!-- SheetJS pour Excel Import/Export -->
+    <!-- SheetJS (Excel) -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     
-    <!-- FontAwesome pour les icônes -->
+    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        /* Personnalisation de la scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .chart-container { position: relative; height: 300px; width: 100%; }
+        .chart-container { position: relative; height: 350px; width: 100%; }
+        .card-hover:hover { transform: translateY(-5px); transition: all 0.3s ease; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        /* Utility for dynamic colored cards */
+        .glass-header { backdrop-filter: blur(5px); background-color: rgba(255,255,255,0.7); }
     </style>
 </head>
-<body class="bg-gray-50 text-slate-800 font-sans">
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
 
-    <!-- Navbar -->
+    <!-- Navbar Global (Style V3 Conservé) -->
     <nav class="bg-white shadow-md sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
-                <div class="flex items-center">
+                <div class="flex items-center cursor-pointer" onclick="showSection('home')">
                     <i class="fa-solid fa-chart-line text-blue-600 text-2xl mr-3"></i>
-                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">Bourse 3000 🚀<span class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full ml-2"></span></h1>
+                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">Bourse 3000 🚀<span class="text-xs bg-gradient-to-r from-blue-500 to-purple-600 text-white px-2 py-0.5 rounded-full ml-2 shadow-sm"></span></h1>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <button onclick="document.getElementById('fileInput').click()" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
-                        <i class="fa-solid fa-file-import"></i> <span class="hidden sm:inline">Importer Excel</span>
+                <div class="flex items-center space-x-3">
+                    <button onclick="showSection('home')" class="p-2 text-gray-500 hover:text-blue-600 transition" title="Accueil">
+                        <i class="fa-solid fa-house text-xl"></i>
                     </button>
-                    <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" onchange="handleImport(event)">
-                    
-                    <button onclick="exportToExcel()" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
-                        <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Exporter</span>
-                    </button>
-                    
-                    <!-- Bouton Reset Data pour recharger les données Excel d'origine si besoin -->
-                    <button onclick="resetToDefaultData()" class="bg-red-50 text-red-500 hover:bg-red-100 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2" title="Réinitialiser les données">
-                        <i class="fa-solid fa-arrows-rotate"></i>
-                    </button>
+                    <!-- Les actions globales (Import/Export) sont déplacées dans l'onglet Transactions comme demandé -->
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        <!-- KPI Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-500">Total Investi (Cumul)</p>
-                        <p class="text-2xl font-bold text-gray-800" id="kpiTotal">0,00 €</p>
-                    </div>
-                    <div class="p-3 bg-blue-50 rounded-full text-blue-600">
-                        <i class="fa-solid fa-wallet text-xl"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-500">Valeur Future Estimée</p>
-                        <p class="text-2xl font-bold text-gray-800" id="kpiFuture">0,00 €</p>
-                    </div>
-                    <div class="p-3 bg-purple-50 rounded-full text-purple-600">
-                        <i class="fa-solid fa-rocket text-xl"></i>
-                    </div>
-                </div>
-                <p class="text-xs text-gray-400 mt-2">Projection actuelle à terme</p>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-500">Rendement Moyen</p>
-                        <p class="text-2xl font-bold text-gray-800" id="kpiReturn">0.00 %</p>
-                    </div>
-                    <div class="p-3 bg-green-50 rounded-full text-green-600">
-                        <i class="fa-solid fa-percent text-xl"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-screen">
 
-        <!-- Charts Section -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            <!-- Pie Chart -->
-            <div class="bg-white p-6 rounded-xl shadow-sm">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Répartition par Entité</h3>
-                <div class="chart-container">
-                    <canvas id="pieChart"></canvas>
+        <!-- ========================================== -->
+        <!-- SECTION 1: HOME (MENU PRINCIPAL)           -->
+        <!-- ========================================== -->
+        <section id="home-view" class="animate-fade-in block">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold text-gray-800">Tableau de bord Investisseur</h2>
+                <p class="text-gray-500 mt-2">Gérez votre patrimoine avec précision</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+                <!-- A: Dashboard -->
+                <div onclick="showSection('dashboard')" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 cursor-pointer card-hover group">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-4 bg-blue-50 rounded-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition">
+                            <i class="fa-solid fa-gauge-high text-3xl"></i>
+                        </div>
+                        <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-blue-500"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">Dashboard</h3>
+                    <p class="text-gray-500 text-sm">KPIs, Répartition et Conseil du jour.</p>
+                </div>
+
+                <!-- B: Résumé Actifs -->
+                <div onclick="showSection('assets')" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 cursor-pointer card-hover group">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-4 bg-indigo-50 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition">
+                            <i class="fa-solid fa-layer-group text-3xl"></i>
+                        </div>
+                        <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-indigo-500"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">Résumé Actifs</h3>
+                    <p class="text-gray-500 text-sm">Vue synthétique colorée de vos positions.</p>
+                </div>
+
+                <!-- C: Transactions (NOUVEAU - Position 3) -->
+                <div onclick="showSection('transactions')" class="bg-white p-8 rounded-2xl shadow-sm border border-blue-200 ring-2 ring-blue-50 cursor-pointer card-hover group">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-4 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-200 group-hover:scale-110 transition">
+                            <i class="fa-solid fa-list-check text-3xl"></i>
+                        </div>
+                        <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-blue-600"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">Transactions <span class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full ml-1 align-top">Cœur</span></h3>
+                    <p class="text-gray-500 text-sm">Journal complet, Ajout, Import & Export Excel.</p>
+                </div>
+
+                <!-- D: Projections (Position 4) -->
+                <div onclick="showSection('projections')" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 cursor-pointer card-hover group">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-4 bg-purple-50 rounded-xl text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition">
+                            <i class="fa-solid fa-chart-area text-3xl"></i>
+                        </div>
+                        <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-purple-500"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">Projections</h3>
+                    <p class="text-gray-500 text-sm">Intérêts composés & Dividendes futurs.</p>
                 </div>
             </div>
-            
-            <!-- Projection Chart -->
-            <div class="bg-white p-6 rounded-xl shadow-sm flex flex-col">
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECTION 2: DASHBOARD                       -->
+        <!-- ========================================== -->
+        <section id="dashboard-view" class="hidden animate-fade-in">
+            <div class="mb-6 flex items-center gap-2 text-gray-500 text-sm">
+                <span onclick="showSection('home')" class="cursor-pointer hover:underline hover:text-blue-600">Accueil</span>
+                <i class="fa-solid fa-chevron-right text-xs"></i>
+                <span class="font-semibold text-blue-600">Dashboard</span>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Total Investi</p>
+                            <p class="text-2xl font-bold text-gray-800" id="kpiTotal">0,00 €</p>
+                        </div>
+                        <div class="p-3 bg-blue-50 rounded-full text-blue-600"><i class="fa-solid fa-wallet text-xl"></i></div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Valeur Estimée</p>
+                            <p class="text-2xl font-bold text-gray-800" id="kpiFuture">0,00 €</p>
+                        </div>
+                        <div class="p-3 bg-purple-50 rounded-full text-purple-600"><i class="fa-solid fa-rocket text-xl"></i></div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Rendement Moy.</p>
+                            <p class="text-2xl font-bold text-gray-800" id="kpiReturn">0.00 %</p>
+                        </div>
+                        <div class="p-3 bg-green-50 rounded-full text-green-600"><i class="fa-solid fa-percent text-xl"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Répartition par Compte</h3>
+                    <div class="chart-container">
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+                <!-- Conseil du jour Dynamique -->
+                <div class="bg-white p-6 rounded-xl shadow-sm flex flex-col justify-center items-center text-center relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-yellow-50 rounded-bl-full -mr-10 -mt-10"></div>
+                    <div class="p-6 bg-yellow-100 rounded-full mb-4 text-yellow-600 z-10">
+                        <i class="fa-regular fa-lightbulb text-4xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 z-10">Conseil du jour</h3>
+                    <p class="text-gray-600 mt-2 max-w-sm italic z-10" id="dailyTip">
+                        Chargement...
+                    </p>
+                    <p class="text-xs text-gray-400 mt-4 z-10" id="tipDate"></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECTION 3: RESUME ACTIFS (Cartes Colorées) -->
+        <!-- ========================================== -->
+        <section id="assets-view" class="hidden animate-fade-in">
+            <div class="mb-6 flex items-center gap-2 text-gray-500 text-sm">
+                <span onclick="showSection('home')" class="cursor-pointer hover:underline hover:text-blue-600">Accueil</span>
+                <i class="fa-solid fa-chevron-right text-xs"></i>
+                <span class="font-semibold text-indigo-600">Résumé Actifs</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="assetsGrid">
+                <!-- Les cartes générées par JS iront ici -->
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECTION 4: TRANSACTIONS (COEUR)            -->
+        <!-- ========================================== -->
+        <section id="transactions-view" class="hidden animate-fade-in">
+            <div class="mb-6 flex justify-between items-end">
+                <div class="flex items-center gap-2 text-gray-500 text-sm">
+                    <span onclick="showSection('home')" class="cursor-pointer hover:underline hover:text-blue-600">Accueil</span>
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                    <span class="font-semibold text-blue-600">Transactions</span>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button onclick="openModal('new')" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition flex items-center gap-2">
+                        <i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Nouveau</span>
+                    </button>
+                    <button onclick="document.getElementById('fileInput').click()" class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-4 py-2 rounded-lg hover:bg-emerald-100 transition flex items-center gap-2">
+                        <i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importer</span>
+                    </button>
+                    <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls, .csv" onchange="handleImport(event)">
+                    <button onclick="exportToExcel()" class="bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 transition">
+                        <i class="fa-solid fa-download"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-600" id="transactionsTable">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+                            <tr>
+                                <th class="px-4 py-3">Date</th>
+                                <th class="px-4 py-3">Opération</th>
+                                <th class="px-4 py-3">Nom Actif</th>
+                                <th class="px-4 py-3">Ticker</th>
+                                <th class="px-4 py-3">Compte</th>
+                                <th class="px-4 py-3">Secteur</th>
+                                <th class="px-4 py-3 text-right">Qté</th>
+                                <th class="px-4 py-3 text-right">Prix U.</th>
+                                <th class="px-4 py-3 text-right">Total</th>
+                                <th class="px-4 py-3 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <!-- JS Generated -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="emptyState" class="hidden p-8 text-center text-gray-400">
+                    <i class="fa-solid fa-inbox text-4xl mb-2"></i>
+                    <p>Aucune transaction enregistrée.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECTION 5: PROJECTIONS                     -->
+        <!-- ========================================== -->
+        <section id="projections-view" class="hidden animate-fade-in">
+            <div class="mb-6 flex justify-between items-center">
+                <div class="flex items-center gap-2 text-gray-500 text-sm">
+                    <span onclick="showSection('home')" class="cursor-pointer hover:underline hover:text-blue-600">Accueil</span>
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                    <span class="font-semibold text-purple-600">Projections</span>
+                </div>
+                <button onclick="showSection('dividends')" class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-4 py-2 rounded-lg hover:bg-emerald-100 transition text-sm font-medium">
+                    <i class="fa-solid fa-coins mr-1"></i> Suivi des Dividendes
+                </button>
+            </div>
+
+            <!-- Main Comparatif Chart -->
+            <div class="bg-white p-6 rounded-xl shadow-sm mb-8">
                 <div class="flex justify-between items-center mb-4 border-b pb-2">
-                    <h3 class="text-lg font-semibold text-gray-800">Projection Capital Composé</h3>
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Projection Patrimoniale</h3>
+                        <p class="text-xs text-gray-500">Inclut plus-values composées et dividendes réinvestis</p>
+                    </div>
                     <div class="flex items-center gap-2">
-                        <label for="projectionYears" class="text-sm text-gray-600">Années:</label>
-                        <input type="number" id="projectionYears" value="30" min="1" max="50" onchange="renderProjectionChart()" 
-                               class="w-16 p-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                        <label class="text-sm text-gray-600">Horizon (ans):</label>
+                        <input type="number" id="projYears" value="20" class="w-16 border rounded text-center focus:ring-2 focus:ring-purple-500 outline-none" onchange="renderProjections()">
                     </div>
                 </div>
-                <div class="chart-container flex-grow">
-                    <canvas id="projectionChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Management Section -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            <!-- Form -->
-            <div class="lg:col-span-1">
-                <div class="bg-white p-6 rounded-xl shadow-sm sticky top-24">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                        <i class="fa-solid fa-pen-to-square text-blue-500"></i> <span id="formTitle">Ajouter un investissement</span>
-                    </h3>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Entité (ex: PEA, CTO)</label>
-                            <input type="text" id="entity" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Nom de l'entité">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Nom de l'actif</label>
-                            <input type="text" id="name" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ex: S&P 500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Date d'investissement</label>
-                            <input type="date" id="date" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition">
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Montant (€)</label>
-                                <input type="number" id="amount" step="0.01" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="0.00">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Rendement (%)</label>
-                                <input type="number" id="return" step="0.01" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="0.00">
-                            </div>
-                        </div>
-
-                        <div class="flex gap-2 pt-2">
-                            <button id="saveBtn" onclick="saveInvestment()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition shadow-sm">
-                                <i class="fa-solid fa-plus mr-1"></i> Ajouter
-                            </button>
-                            <button onclick="resetForm()" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition">
-                                <i class="fa-solid fa-rotate-left"></i>
-                            </button>
-                        </div>
-                    </div>
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="mainProjectionChart"></canvas>
                 </div>
             </div>
 
-            <!-- Table -->
-            <div class="lg:col-span-2">
-                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                    <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-4 justify-between items-center">
-                        <h3 class="font-semibold text-gray-800">Liste des actifs (2024 - 2025)</h3>
-                        <div class="relative">
-                            <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                            <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Rechercher..." 
-                                   class="pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-full focus:ring-2 focus:ring-blue-500 outline-none w-48 sm:w-64">
-                        </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-sm font-bold text-gray-700 mb-4">Investissement Annuel</h3>
+                    <div class="chart-container">
+                        <canvas id="yearlyBarChart"></canvas>
                     </div>
-                    
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm text-left text-gray-500" id="investmentsTable">
-                            <thead class="text-xs text-gray-700 uppercase bg-gray-100">
-                                <tr>
-                                    <th scope="col" class="px-6 py-3 cursor-pointer hover:bg-gray-200 transition" onclick="sortTable(0)">Entité <i class="fa-solid fa-sort text-gray-400 ml-1"></i></th>
-                                    <th scope="col" class="px-6 py-3 cursor-pointer hover:bg-gray-200 transition" onclick="sortTable(1)">Nom <i class="fa-solid fa-sort text-gray-400 ml-1"></i></th>
-                                    <th scope="col" class="px-6 py-3 cursor-pointer hover:bg-gray-200 transition" onclick="sortTable(2)">Date <i class="fa-solid fa-sort text-gray-400 ml-1"></i></th>
-                                    <th scope="col" class="px-6 py-3 text-right cursor-pointer hover:bg-gray-200 transition" onclick="sortTable(3)">Montant <i class="fa-solid fa-sort text-gray-400 ml-1"></i></th>
-                                    <th scope="col" class="px-6 py-3 text-right cursor-pointer hover:bg-gray-200 transition" onclick="sortTable(4)">Rend. % <i class="fa-solid fa-sort text-gray-400 ml-1"></i></th>
-                                    <th scope="col" class="px-6 py-3 text-right">Val. Future</th>
-                                    <th scope="col" class="px-6 py-3 text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200">
-                                <!-- Lignes générées par JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                    <div id="emptyState" class="hidden p-8 text-center text-gray-400">
-                        <i class="fa-solid fa-folder-open text-4xl mb-2"></i>
-                        <p>Aucun investissement trouvé.</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h3 class="text-sm font-bold text-gray-700 mb-4">Fréquence d'Opérations</h3>
+                    <div class="chart-container">
+                        <canvas id="frequencyChart"></canvas>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECTION 6: DIVIDENDES (Vue Subsidiaire)    -->
+        <!-- ========================================== -->
+        <section id="dividends-view" class="hidden animate-fade-in">
+            <div class="mb-6 flex items-center gap-2 text-gray-500 text-sm">
+                <span onclick="showSection('projections')" class="cursor-pointer hover:underline hover:text-purple-600">Projections</span>
+                <i class="fa-solid fa-chevron-right text-xs"></i>
+                <span class="font-semibold text-emerald-600">Dividendes</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="dividendCards">
+                <!-- Cards JS -->
+            </div>
+            <div id="noDividends" class="hidden text-center py-10">
+                <p class="text-gray-400">Aucun actif à dividende détecté.</p>
+            </div>
+        </section>
+
     </main>
 
+    <!-- Modal Formulaire Transaction (Style V3 mais champs V4) -->
+    <div id="modalForm" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-[100] flex justify-center items-center backdrop-blur-sm px-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all scale-100 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6 border-b pb-4">
+                <h3 class="text-xl font-bold text-gray-800" id="modalTitle">Nouvelle Transaction</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            
+            <form id="txForm" onsubmit="event.preventDefault(); saveTransaction();" class="space-y-4">
+                <input type="hidden" id="editIndex">
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Date</label>
+                        <input type="date" id="fDate" required class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Opération</label>
+                        <select id="fOp" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="Achat">Achat</option>
+                            <option value="Vente">Vente</option>
+                            <option value="Dividende">Dividende Perçu</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Nom Actif</label>
+                        <input type="text" id="fName" required placeholder="ex: LVMH" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Ticker</label>
+                        <input type="text" id="fTicker" placeholder="ex: MC.PA" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Compte</label>
+                        <input type="text" id="fAccount" placeholder="ex: PEA" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Secteur</label>
+                        <input type="text" id="fSector" placeholder="ex: Luxe" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Quantité</label>
+                        <input type="number" id="fQty" step="0.0001" placeholder="0" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">Prix U. / PRU (€)</label>
+                        <input type="number" id="fPrice" step="0.01" placeholder="0.00" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                
+                <div class="bg-blue-50 p-3 rounded text-xs text-blue-700">
+                    <i class="fa-solid fa-info-circle mr-1"></i> Pour un dividende, mettez le montant total reçu dans "Prix U" et Quantité à 1 (ou 0).
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition mt-6 shadow-lg shadow-blue-200">Enregistrer</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Notification Toast -->
-    <div id="toast" class="fixed bottom-5 right-5 bg-gray-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
-        <i class="fa-solid fa-info-circle text-blue-400"></i>
-        <span id="toastMsg">Notification</span>
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
+        <i class="fa-solid fa-check-circle text-green-400"></i>
+        <span id="toastMsg">Opération réussie</span>
     </div>
 
     <script>
-        // --- Configuration & Données ---
-        const msPerYear = 1000 * 60 * 60 * 24 * 365;
-        let investments = [];
-        let editingIndex = null;
-        let pieChart, projChart;
+        // --- 1. CONFIGURATION & DONNEES ---
+        let transactions = [];
+        let charts = {};
+        
+        // Base mockée pour dividendes futurs (Zonebourse simulation)
+        const mockDividends = {
+            'Action Vinci': { current: 4.50, yield: 0.04 },
+            'Total Energie': { current: 3.20, yield: 0.055 },
+            'Accor': { current: 1.10, yield: 0.025 },
+            'Mercedes': { current: 5.30, yield: 0.07 },
+            'Neurones': { current: 1.20, yield: 0.03 },
+            'L\'Alpesia (Obligation)': { current: 250, yield: 0.125 }, 
+            'DEFAULT': { current: 0, yield: 0.03 } 
+        };
 
-        // --- Initialisation ---
+        const tips = [
+            "La diversification est la seule gratuité en finance.",
+            "L'intérêt composé est la 8ème merveille du monde.",
+            "N'investissez que ce que vous pouvez perdre.",
+            "Méfiez-vous des frais, ils grignotent votre performance.",
+            "Le temps est votre meilleur allié, soyez patient.",
+            "Achetez quand le sang coule dans les rues.",
+            "Ne suivez pas la foule, ayez votre propre thèse.",
+            "Réinvestissez toujours vos dividendes.",
+            "Les marchés sont volatils, votre stratégie doit être stable.",
+            "Faites un point mensuel, pas quotidien."
+        ];
+
+        // --- 2. INITIALISATION ---
         document.addEventListener('DOMContentLoaded', () => {
-            // On essaie de charger depuis le stockage local
-            const stored = localStorage.getItem('investments');
-            if (stored) {
-                investments = JSON.parse(stored);
-            } else {
-                // Si rien dans le stockage, on charge les données du fichier Excel (Real Data)
-                loadRealData();
-            }
-            updateAll();
+            loadTransactions();
+            loadDailyTip();
+            // Default: Home
         });
 
-        // Fonction pour recharger les données "Hardcodées" si l'utilisateur veut reset
-        function resetToDefaultData() {
-            if(confirm("Attention: Cela va effacer vos modifications et recharger les données originales du fichier Excel. Continuer ?")) {
-                loadRealData();
-                updateAll();
-                showToast('Données réinitialisées !');
-            }
-        }
-
-        function loadRealData() {
-            // Intégration des données réelles issues du fichier Excel fourni
-            investments = [
-                // 2024 - Historique
-                {entity:'Castor Vinci', name:'Action Vinci', date:'2024-01-31', amount:1403.00, return:8.0},
-                {entity:'Castor Vinci', name:'Action Vinci', date:'2024-03-01', amount:951.50, return:8.0},
-                {entity:'Castor Vinci', name:'Action Vinci', date:'2024-03-01', amount:1903.00, return:8.0},
-                {entity:'CTO bourse', name:'Accor', date:'2024-11-12', amount:120.79, return:8.0},
-                {entity:'CTO bourse', name:'Total Energie', date:'2024-11-12', amount:150.80, return:8.0}, // Achat conservé pour l'historique
-                {entity:'CTO bourse', name:'S&P 500', date:'2024-11-12', amount:221.20, return:8.0},
-                {entity:'CTO bourse', name:'Neurones', date:'2024-12-04', amount:201.83, return:8.0},
-                {entity:'CTO bourse', name:'Mercedes', date:'2024-12-04', amount:85.57, return:8.0},
-                {entity:'CTO bourse', name:'Rocket Lab', date:'2024-12-04', amount:98.55, return:8.0},
-                {entity:'CTO bourse', name:'S&P 500', date:'2024-12-04', amount:113.49, return:8.0},
-                {entity:'CTO bourse', name:'NASDAQ 100', date:'2024-12-13', amount:501.12, return:8.0},
-                {entity:'CTO bourse', name:'S&P 500', date:'2024-12-17', amount:140.45, return:8.0},
-                
-                // 2025 - Prévisions & DCA (Gold, etc.)
-                {entity:'PEA', name:'S&P 500', date:'2025-02-06', amount:0, return:8.0}, // Montant 0 dans fichier, conservé
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-03-03', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-03-17', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'NASDAQ 100', date:'2025-04-01', amount:496.87, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-04-02', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Mercedes', date:'2025-04-03', amount:9.37, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-04-16', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-05-02', amount:50.00, return:8.0},
-                {entity:'Castor Vinci', name:'Action Vinci', date:'2025-05-06', amount:1120.07, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-05-16', amount:50.00, return:8.0},
-                {entity:'Castor Vinci', name:'Action Vinci', date:'2025-05-30', amount:3408.89, return:8.0},
-                {entity:'Castor Vinci', name:'Action Vinci', date:'2025-05-30', amount:879.18, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-06-02', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-06-16', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'S&P 500', date:'2025-06-18', amount:9.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-07-02', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-07-16', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-08-04', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-08-18', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-09-02', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-09-16', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-10-02', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-10-16', amount:50.00, return:8.0},
-                {entity:'La Première Brique', name:'L\'Alpesia (Obligation)', date:'2025-11-01', amount:2000.00, return:12.5},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-11-03', amount:50.00, return:8.0},
-                {entity:'CTO bourse', name:'Accor', date:'2025-11-25', amount:49.00, return:8.0},
-                {entity:'CTO bourse', name:'Ishares Physical Gold', date:'2025-12-02', amount:50.00, return:8.0},
-            ];
-            saveLocal();
-        }
-
-        function saveLocal() {
-            localStorage.setItem('investments', JSON.stringify(investments));
-        }
-
-        function updateAll() {
-            // Tri par date décroissante pour voir les récents/futurs en premier ou inversement
-            // Ici on trie par date croissante (ancien -> futur)
-            investments.sort((a,b) => new Date(a.date) - new Date(b.date));
+        function showSection(id) {
+            document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(id + '-view').classList.remove('hidden');
             
-            renderTable();
-            renderKPIs();
-            renderPie();
-            renderProjectionChart();
-            saveLocal();
+            if(id === 'dashboard') { updateKPIs(); renderPieChart(); }
+            if(id === 'assets') renderAssetsGrid();
+            if(id === 'transactions') renderTxTable();
+            if(id === 'projections') renderProjections();
+            if(id === 'dividends') renderDividends();
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // --- CRUD Operations ---
-        function saveInvestment() {
-            const e = document.getElementById('entity').value.trim();
-            const n = document.getElementById('name').value.trim();
-            const d = document.getElementById('date').value;
-            const a = parseFloat(document.getElementById('amount').value);
-            const r = parseFloat(document.getElementById('return').value);
+        // --- 3. LOGIQUE METIER ---
 
-            if (!e || !d || isNaN(a) || isNaN(r)) {
-                showToast('Veuillez remplir tous les champs correctement.', 'error');
-                return;
-            }
-
-            const newInv = { entity: e, name: n, date: d, amount: a, return: r };
-
-            if (editingIndex !== null) {
-                investments[editingIndex] = newInv;
-                editingIndex = null;
-                document.getElementById('saveBtn').innerHTML = '<i class="fa-solid fa-plus mr-1"></i> Ajouter';
-                document.getElementById('saveBtn').classList.replace('bg-green-600', 'bg-blue-600');
-                document.getElementById('saveBtn').classList.replace('hover:bg-green-700', 'hover:bg-blue-700');
-                document.getElementById('formTitle').textContent = 'Ajouter un investissement';
-                showToast('Investissement modifié avec succès !');
+        function loadTransactions() {
+            const stored = localStorage.getItem('invest_v4_tx');
+            if(stored) {
+                transactions = JSON.parse(stored);
             } else {
-                investments.push(newInv);
-                showToast('Investissement ajouté !');
-            }
-            
-            resetForm();
-            updateAll();
-        }
-
-        function startEdit(i) {
-            const inv = investments[i];
-            document.getElementById('entity').value = inv.entity;
-            document.getElementById('name').value = inv.name;
-            document.getElementById('date').value = inv.date;
-            document.getElementById('amount').value = inv.amount;
-            document.getElementById('return').value = inv.return;
-            
-            editingIndex = i;
-            
-            const btn = document.getElementById('saveBtn');
-            btn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Enregistrer';
-            btn.classList.replace('bg-blue-600', 'bg-green-600');
-            btn.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
-            document.getElementById('formTitle').textContent = 'Modifier l\'investissement';
-            
-            if(window.innerWidth < 1024) {
-                document.getElementById('formTitle').scrollIntoView({behavior: 'smooth'});
+                // Données V3 converties en format V4 (Transactions) pour la démo
+                seedV3Data();
             }
         }
-
-        function deleteInvestment(i) {
-            if(confirm('Voulez-vous vraiment supprimer cet investissement ?')) {
-                investments.splice(i, 1);
-                updateAll();
-                showToast('Investissement supprimé.');
-            }
+        
+        function saveTxLocal() {
+            localStorage.setItem('invest_v4_tx', JSON.stringify(transactions));
+            showToast('Données sauvegardées');
         }
 
-        function resetForm() {
-            ['entity','name','date','amount','return'].forEach(f => document.getElementById(f).value = '');
-            editingIndex = null;
-            const btn = document.getElementById('saveBtn');
-            btn.innerHTML = '<i class="fa-solid fa-plus mr-1"></i> Ajouter';
-            btn.classList.replace('bg-green-600', 'bg-blue-600');
-            btn.classList.replace('hover:bg-green-700', 'hover:bg-blue-700');
-            document.getElementById('formTitle').textContent = 'Ajouter un investissement';
+        function seedV3Data() {
+            // Conversion des anciennes données V3 vers format V4
+            transactions = [
+                {date:'2024-01-31', op:'Achat', ticker:'DG.PA', name:'Action Vinci', account:'PEA', qty:15, price:93.53, sector:'Industrie'},
+                {date:'2024-03-01', op:'Achat', ticker:'DG.PA', name:'Action Vinci', account:'PEA', qty:10, price:95.15, sector:'Industrie'},
+                {date:'2024-11-12', op:'Achat', ticker:'TTE.PA', name:'Total Energie', account:'CTO', qty:5, price:60.32, sector:'Energie'},
+                {date:'2024-12-04', op:'Achat', ticker:'MBG.DE', name:'Mercedes', account:'CTO', qty:2, price:57.05, sector:'Auto'},
+                {date:'2025-05-06', op:'Achat', ticker:'AC.PA', name:'Accor', account:'PEA', qty:20, price:42.00, sector:'Tourisme'},
+                {date:'2024-06-20', op:'Dividende', ticker:'TTE.PA', name:'Total Energie', account:'CTO', qty:1, price:15.50, sector:'Energie'}
+            ];
+            saveTxLocal();
         }
 
-        // --- Table & Filter ---
-        function renderTable() {
-            const tbody = document.querySelector('#investmentsTable tbody');
-            const emptyState = document.getElementById('emptyState');
-            const filter = document.getElementById('searchInput').value.toLowerCase();
+        function loadDailyTip() {
+            // Tip changeant chaque jour
+            const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
+            const index = dayOfYear % tips.length;
+            document.getElementById('dailyTip').textContent = `"${tips[index]}"`;
+            document.getElementById('tipDate').textContent = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+        }
+
+        // --- 4. RENDERERS ---
+
+        // A. Dashboard
+        function updateKPIs() {
+            let invested = 0;
+            // Calcul simple V4
+            transactions.forEach(tx => {
+                const amt = tx.qty * tx.price;
+                if(tx.op === 'Achat') invested += amt;
+                else if(tx.op === 'Vente') invested -= amt;
+            });
+            // Estimation Valeur (fictive +10%)
+            const val = invested * 1.10;
+
+            document.getElementById('kpiTotal').textContent = invested.toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
+            document.getElementById('kpiFuture').textContent = val.toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
+            document.getElementById('kpiReturn').textContent = "+10.00 %"; 
+        }
+
+        function renderPieChart() {
+            const accData = {};
+            transactions.filter(t => t.op==='Achat').forEach(t => {
+                accData[t.account] = (accData[t.account] || 0) + (t.qty * t.price);
+            });
             
+            const ctx = document.getElementById('pieChart').getContext('2d');
+            if(charts.pie) charts.pie.destroy();
+            
+            charts.pie = new Chart(ctx, {
+                type: 'doughnut',
+                data: { 
+                    labels: Object.keys(accData), 
+                    datasets: [{ 
+                        data: Object.values(accData),
+                        backgroundColor: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b'] 
+                    }] 
+                },
+                options: { maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+            });
+        }
+
+        // B. Résumé Actifs (Cartes Colorées)
+        function renderAssetsGrid() {
+            const container = document.getElementById('assetsGrid');
+            container.innerHTML = '';
+            
+            // Aggrégation
+            const assets = {};
+            transactions.forEach(tx => {
+                if(tx.op === 'Dividende') return;
+                if(!assets[tx.name]) assets[tx.name] = { name: tx.name, qty: 0, invested: 0, ticker: tx.ticker };
+                
+                if(tx.op === 'Achat') {
+                    assets[tx.name].qty += tx.qty;
+                    assets[tx.name].invested += (tx.qty * tx.price);
+                } else if(tx.op === 'Vente') {
+                    assets[tx.name].qty -= tx.qty;
+                    assets[tx.name].invested -= (tx.qty * tx.price); // Simplification PRU
+                }
+            });
+
+            Object.values(assets).forEach(a => {
+                if(a.qty < 0.01) return;
+                
+                const pru = a.invested / a.qty;
+                const colorBg = stringToColor(a.name, 95, 90); // Pastel
+                const colorBorder = stringToColor(a.name, 60, 50); // Sombre
+
+                const card = document.createElement('div');
+                card.className = "bg-white rounded-xl shadow-sm border overflow-hidden card-hover";
+                card.style.borderColor = colorBorder; // Bordure colorée demandée
+                
+                card.innerHTML = `
+                    <div class="p-4 flex justify-between items-center" style="background-color: ${colorBg}">
+                        <h3 class="font-bold text-gray-800" style="color:${colorBorder}">${a.name}</h3>
+                        <span class="text-xs bg-white px-2 py-1 rounded font-mono font-bold text-gray-600">${a.ticker || ''}</span>
+                    </div>
+                    <div class="p-5">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-gray-500 text-sm">Quantité</span>
+                            <span class="font-bold font-mono">${a.qty.toFixed(2)}</span>
+                        </div>
+                        <div class="flex justify-between mb-2">
+                            <span class="text-gray-500 text-sm">PRU Moyen</span>
+                            <span class="font-mono">${pru.toFixed(2)} €</span>
+                        </div>
+                        <div class="flex justify-between pt-3 border-t border-dashed mt-2">
+                            <span class="text-gray-500 text-sm">Investi</span>
+                            <span class="font-bold text-lg" style="color:${colorBorder}">${a.invested.toLocaleString('fr-FR', {style:'currency', currency:'EUR'})}</span>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // C. Transactions (Tableau)
+        function renderTxTable() {
+            const tbody = document.querySelector('#transactionsTable tbody');
             tbody.innerHTML = '';
             
-            let visibleCount = 0;
-            const now = new Date();
+            const sorted = [...transactions].sort((a,b) => new Date(b.date) - new Date(a.date));
+            
+            if(sorted.length === 0) document.getElementById('emptyState').classList.remove('hidden');
+            else document.getElementById('emptyState').classList.add('hidden');
 
-            investments.forEach((inv, i) => {
-                const textContent = `${inv.entity} ${inv.name} ${inv.date}`.toLowerCase();
-                if (filter && !textContent.includes(filter)) return;
+            sorted.forEach((tx, i) => {
+                const total = tx.op === 'Dividende' ? tx.price : (tx.qty * tx.price);
+                const realIndex = transactions.indexOf(tx);
 
-                visibleCount++;
-                // Calcul Valeur Future simplifiée (Si investissement futur, yrs = 0 pour l'instant)
-                const yrs = Math.max(0, (now - new Date(inv.date)) / msPerYear);
-                const future = inv.amount * Math.pow(1 + inv.return/100, yrs);
+                let opBadge = tx.op === 'Achat' 
+                    ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Achat</span>' 
+                    : (tx.op === 'Vente' ? '<span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Vente</span>' 
+                    : '<span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">Dividende</span>');
 
                 const tr = document.createElement('tr');
-                tr.className = 'bg-white border-b hover:bg-gray-50 transition';
-                
-                // Style conditionnel pour les dates futures (prévisionnel)
-                const isFuture = new Date(inv.date) > now;
-                const dateClass = isFuture ? 'text-blue-500 italic' : 'text-gray-500';
-                
+                tr.className = "bg-white border-b hover:bg-gray-50 transition";
                 tr.innerHTML = `
-                    <td class="px-6 py-4 font-medium text-gray-900">${inv.entity}</td>
-                    <td class="px-6 py-4">${inv.name}</td>
-                    <td class="px-6 py-4 text-xs ${dateClass}">${inv.date} ${isFuture ? '(Prévu)' : ''}</td>
-                    <td class="px-6 py-4 text-right font-mono text-gray-700">${inv.amount.toLocaleString('fr-FR',{minimumFractionDigits:2})} €</td>
-                    <td class="px-6 py-4 text-right">
-                        <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded border border-blue-400">
-                            ${inv.return}%
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 text-right font-mono font-semibold text-green-600">${future.toLocaleString('fr-FR',{minimumFractionDigits:2})} €</td>
-                    <td class="px-6 py-4 text-center space-x-2">
-                        <button onclick="startEdit(${i})" class="text-blue-600 hover:text-blue-900 transition" title="Modifier"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="deleteInvestment(${i})" class="text-red-500 hover:text-red-700 transition" title="Supprimer"><i class="fa-solid fa-trash"></i></button>
+                    <td class="px-4 py-3 font-mono text-xs">${tx.date}</td>
+                    <td class="px-4 py-3">${opBadge}</td>
+                    <td class="px-4 py-3 font-medium text-gray-800">${tx.name}</td>
+                    <td class="px-4 py-3 text-xs text-gray-500">${tx.ticker || '-'}</td>
+                    <td class="px-4 py-3 text-xs">${tx.account || '-'}</td>
+                    <td class="px-4 py-3 text-xs">${tx.sector || '-'}</td>
+                    <td class="px-4 py-3 text-right font-mono">${tx.op==='Dividende' ? '-' : tx.qty}</td>
+                    <td class="px-4 py-3 text-right font-mono text-xs">${tx.price.toFixed(2)}</td>
+                    <td class="px-4 py-3 text-right font-bold font-mono text-gray-700">${total.toFixed(2)} €</td>
+                    <td class="px-4 py-3 text-center">
+                        <button onclick="openModal('edit', ${realIndex})" class="text-blue-500 hover:text-blue-700 mx-1"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteTx(${realIndex})" class="text-red-400 hover:text-red-600 mx-1"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
-
-            if (visibleCount === 0) emptyState.classList.remove('hidden');
-            else emptyState.classList.add('hidden');
         }
 
-        function filterTable() { renderTable(); }
-
-        function sortTable(col) {
-            const keys = ['entity','name','date','amount','return'];
-            investments.sort((a,b) => {
-                let x = a[keys[col]], y = b[keys[col]];
-                if (col === 2) return new Date(x) - new Date(y);
-                if (col >= 3 && col <= 4) return x - y;
-                return x.localeCompare(y);
-            });
-            renderTable();
-        }
-
-        // --- KPIs & Charts ---
-        function renderKPIs() {
-            const now = new Date();
-            const total = investments.reduce((s, inv) => s + (inv.amount || 0), 0);
+        // D. Projections (Avec Dividendes Intelligents)
+        function renderProjections() {
+            const years = parseInt(document.getElementById('projYears').value) || 20;
+            const labels = Array.from({length: years+1}, (_, i) => `An ${i}`);
             
-            // Calculer la valeur actuelle
-            const currentValue = investments.reduce((s, inv) => {
-                const yrs = Math.max(0, (now - new Date(inv.date)) / msPerYear);
-                return s + (inv.amount * Math.pow(1 + (inv.return/100), yrs));
-            }, 0);
-
-            let weightedReturn = 0;
-            if (total > 0) {
-                 weightedReturn = investments.reduce((s, inv) => s + (inv.return * inv.amount), 0) / total;
-            }
-
-            document.getElementById('kpiTotal').textContent = total.toLocaleString('fr-FR',{minimumFractionDigits:2}) + ' €';
-            document.getElementById('kpiFuture').textContent = currentValue.toLocaleString('fr-FR',{minimumFractionDigits:2}) + ' €';
-            document.getElementById('kpiReturn').textContent = weightedReturn.toFixed(2) + ' %';
-        }
-
-        function renderPie() {
-            const agg = {};
-            investments.forEach(i => agg[i.entity] = (agg[i.entity] || 0) + i.amount);
+            // 1. Calculer le portefeuille actuel (Parts)
+            const portfolio = {};
+            let startCapital = 0;
             
-            const labels = Object.keys(agg);
-            const data = Object.values(agg);
-            const colors = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#6366F1', '#EC4899', '#14B8A6'];
-
-            const ctx = document.getElementById('pieChart').getContext('2d');
-            if (pieChart) pieChart.destroy();
-            
-            pieChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: { 
-                    labels, 
-                    datasets: [{ 
-                        data,
-                        backgroundColor: colors,
-                        borderWidth: 0,
-                        hoverOffset: 4
-                    }] 
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8 } },
-                        datalabels: {
-                            color: '#fff',
-                            font: { weight: 'bold', size: 11 },
-                            formatter: (val, ctx) => {
-                                let sum = 0;
-                                ctx.chart.data.datasets[0].data.map(data => sum += data);
-                                let percentage = (val*100 / sum).toFixed(1)+"%";
-                                return (val*100 / sum) > 5 ? percentage : '';
-                            }
-                        }
-                    },
-                    cutout: '65%'
+            transactions.forEach(tx => {
+                if(tx.op === 'Achat') {
+                    portfolio[tx.name] = (portfolio[tx.name] || 0) + tx.qty;
+                    startCapital += (tx.qty * tx.price);
+                } else if(tx.op === 'Vente') {
+                    portfolio[tx.name] = (portfolio[tx.name] || 0) - tx.qty;
+                    startCapital -= (tx.qty * tx.price);
                 }
             });
-        }
 
-        function renderProjectionChart() {
-            const years = parseInt(document.getElementById('projectionYears').value) || 20;
-            const labels = Array.from({ length: years + 1 }, (_, t) => `An ${t}`);
-            
-            const data = labels.map((_, t) => {
-                return investments.reduce((s, inv) => {
-                    // Pour simplifier la projection: on considère que tout est investi aujourd'hui pour la projection long terme
-                    // Ou alors on prend la formule composée standard sur le montant initial
-                    return s + inv.amount * Math.pow(1 + inv.return/100, t);
-                }, 0);
+            // 2. Estimer les dividendes annuels (Parts * Unit Dividend)
+            let annualDivs = 0;
+            Object.entries(portfolio).forEach(([name, qty]) => {
+                if(qty <= 0) return;
+                const info = mockDividends[name] || mockDividends['DEFAULT'];
+                // Si on a un dividende unitaire (info.current), on l'utilise
+                if(info.current > 0) {
+                    annualDivs += qty * info.current;
+                } else {
+                    // Sinon fallback rendement 3% sur PRU approx (ici on simplifie)
+                    // Pour V4 stricte: Sum(Parts) * Valeur Dividende
+                }
             });
 
-            const ctx = document.getElementById('projectionChart').getContext('2d');
-            if (projChart) projChart.destroy();
+            // 3. Projection courbe
+            const dataTotal = [];
+            let current = startCapital;
+            // Hypothèses: Croissance prix 4%, Croissance dividende 2%
             
-            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)'); 
-            gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)'); 
+            for(let t=0; t<=years; t++) {
+                if(t === 0) dataTotal.push(current);
+                else {
+                    // Le capital s'apprécie
+                    current = current * 1.04; 
+                    // Les dividendes sont reçus (et réinvestis)
+                    const divYear = annualDivs * Math.pow(1.02, t);
+                    current += divYear;
+                    dataTotal.push(current);
+                }
+            }
+            
+            // Ligne Investi (sans intérêts)
+            const dataInvested = labels.map(() => startCapital);
 
-            projChart = new Chart(ctx, {
+            const ctx = document.getElementById('mainProjectionChart').getContext('2d');
+            if(charts.proj) charts.proj.destroy();
+            
+            const gradient = ctx.createLinearGradient(0,0,0,400);
+            gradient.addColorStop(0, 'rgba(147, 51, 234, 0.4)');
+            gradient.addColorStop(1, 'rgba(147, 51, 234, 0.0)');
+
+            charts.proj = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels,
-                    datasets: [{
-                        label: 'Capital Projeté',
-                        data,
-                        borderColor: '#3B82F6',
-                        backgroundColor: gradient,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 2,
-                        pointHoverRadius: 5
-                    }]
+                    datasets: [
+                        {
+                            label: 'Patrimoine (Composé + Dividendes)',
+                            data: dataTotal,
+                            borderColor: '#9333ea',
+                            backgroundColor: gradient,
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Capital Investi (Cash Out)',
+                            data: dataInvested,
+                            borderColor: '#f97316',
+                            borderDash: [5,5],
+                            tension: 0
+                        }
+                    ]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return context.parsed.y.toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
-                                }
-                            }
-                        },
-                        datalabels: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            grid: { borderDash: [2, 4], color: '#f3f4f6' },
-                            ticks: { callback: (val) => (val/1000).toFixed(0) + 'k€' }
-                        },
-                        x: { grid: { display: false } }
-                    }
-                }
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => (v/1000).toFixed(0)+'k€' } } } }
+            });
+            
+            renderYearlyBar();
+            renderFrequency();
+        }
+
+        function renderYearlyBar() {
+            const yData = {};
+            transactions.filter(t=>t.op==='Achat').forEach(t => {
+                const y = t.date.split('-')[0];
+                yData[y] = (yData[y]||0) + (t.qty*t.price);
+            });
+            
+            const ctx = document.getElementById('yearlyBarChart').getContext('2d');
+            if(charts.bar) charts.bar.destroy();
+            
+            charts.bar = new Chart(ctx, {
+                type: 'bar',
+                data: { 
+                    labels: Object.keys(yData).sort(), 
+                    datasets: [{ label:'Cashflow Investi', data:Object.values(yData), backgroundColor:'#10b981', borderRadius:4 }] 
+                },
+                options: { maintainAspectRatio: false }
             });
         }
 
-        // --- Import / Export ---
+        function renderFrequency() {
+            let count = 0;
+            const data = transactions.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(t => ++count);
+            const labels = transactions.map(t=>t.date);
+            
+            const ctx = document.getElementById('frequencyChart').getContext('2d');
+            if(charts.freq) charts.freq.destroy();
+            charts.freq = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets: [{ label:'Nombre Opérations', data, borderColor:'#6366f1', pointRadius:0 }] },
+                options: { maintainAspectRatio: false, scales: { x: { display: false } } }
+            });
+        }
+
+        // E. Dividendes Cards
+        function renderDividends() {
+            const container = document.getElementById('dividendCards');
+            container.innerHTML = '';
+            
+            // Calcul parts
+            const parts = {};
+            transactions.forEach(t => {
+                if(t.op === 'Achat') parts[t.name] = (parts[t.name]||0) + t.qty;
+                if(t.op === 'Vente') parts[t.name] = (parts[t.name]||0) - t.qty;
+            });
+
+            let found = false;
+            Object.entries(parts).forEach(([name, qty]) => {
+                if(qty < 0.01) return;
+                const info = mockDividends[name];
+                
+                if(info && info.current > 0) {
+                    found = true;
+                    const annual = qty * info.current;
+                    const colorBg = stringToColor(name, 95, 90);
+                    const colorTxt = stringToColor(name, 40, 40);
+                    
+                    const html = `
+                        <div class="bg-white rounded-xl shadow-sm border overflow-hidden card-hover">
+                            <div class="p-4 flex justify-between items-center" style="background-color:${colorBg}">
+                                <h3 class="font-bold" style="color:${colorTxt}">${name}</h3>
+                                <i class="fa-solid fa-coins text-yellow-500"></i>
+                            </div>
+                            <div class="p-4">
+                                <div class="flex justify-between items-end mb-4">
+                                    <div>
+                                        <p class="text-xs text-gray-400 uppercase">Revenu Annuel</p>
+                                        <p class="text-2xl font-bold text-emerald-600">${annual.toFixed(2)} €</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-xs text-gray-400">Dividende Unit.</p>
+                                        <p class="font-mono font-bold">${info.current.toFixed(2)} €</p>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between text-xs text-gray-400 border-t pt-2">
+                                    <span>N-2: ${(info.current*0.9).toFixed(2)}</span>
+                                    <span class="text-emerald-600 font-bold">N: ${info.current.toFixed(2)}</span>
+                                    <span>N+2: ${(info.current*1.1).toFixed(2)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    container.innerHTML += html;
+                }
+            });
+            
+            if(!found) document.getElementById('noDividends').classList.remove('hidden');
+        }
+
+
+        // --- 5. HELPERS ---
+        function stringToColor(str, s, l) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            return `hsl(${hash % 360}, ${s}%, ${l}%)`;
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            document.getElementById('toastMsg').textContent = msg;
+            t.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 3000);
+        }
+
+        // --- 6. MODAL & EXCEL ---
+        function openModal(mode, idx=null) {
+            document.getElementById('modalForm').classList.remove('hidden');
+            document.getElementById('editIndex').value = idx !== null ? idx : '';
+            if(mode === 'new') {
+                document.getElementById('fDate').value = new Date().toISOString().split('T')[0];
+                document.getElementById('fName').value = '';
+                document.getElementById('fQty').value = '';
+                document.getElementById('fPrice').value = '';
+            } else {
+                const tx = transactions[idx];
+                document.getElementById('fDate').value = tx.date;
+                document.getElementById('fOp').value = tx.op;
+                document.getElementById('fName').value = tx.name;
+                document.getElementById('fTicker').value = tx.ticker;
+                document.getElementById('fAccount').value = tx.account;
+                document.getElementById('fSector').value = tx.sector;
+                document.getElementById('fQty').value = tx.qty;
+                document.getElementById('fPrice').value = tx.price;
+            }
+        }
+        function closeModal() { document.getElementById('modalForm').classList.add('hidden'); }
+        
+        function saveTransaction() {
+            const idx = document.getElementById('editIndex').value;
+            const tx = {
+                date: document.getElementById('fDate').value,
+                op: document.getElementById('fOp').value,
+                name: document.getElementById('fName').value,
+                ticker: document.getElementById('fTicker').value,
+                account: document.getElementById('fAccount').value,
+                sector: document.getElementById('fSector').value,
+                qty: parseFloat(document.getElementById('fQty').value)||0,
+                price: parseFloat(document.getElementById('fPrice').value)||0
+            };
+            
+            if(idx !== '') transactions[idx] = tx;
+            else transactions.push(tx);
+            
+            saveTxLocal();
+            closeModal();
+            renderTxTable();
+        }
+
+        function deleteTx(idx) {
+            if(confirm('Supprimer ?')) {
+                transactions.splice(idx,1);
+                saveTxLocal();
+                renderTxTable();
+            }
+        }
+
         function exportToExcel() {
-            const dataToExport = investments.map(inv => ({
-                'Entité': inv.entity,
-                'Nom': inv.name,
-                'Date': inv.date,
-                'Montant (€)': inv.amount,
-                'Rendement (%)': inv.return
-            }));
-            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const ws = XLSX.utils.json_to_sheet(transactions);
             const wb = XLSX.utils.book_new();
-            const wscols = [{wch: 20}, {wch: 25}, {wch: 15}, {wch: 15}, {wch: 15}];
-            ws['!cols'] = wscols;
-            XLSX.utils.book_append_sheet(wb, ws, "Investissements");
-            XLSX.writeFile(wb, "Mes_Investissements_V2.xlsx");
-            showToast('Export Excel réussi !');
+            XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+            XLSX.writeFile(wb, "InvestTrack_Transactions.xlsx");
         }
 
         function handleImport(e) {
             const file = e.target.files[0];
-            if (!file) return;
             const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-                    if(jsonData.length === 0) { showToast('Fichier vide.', 'error'); return; }
-
-                    let count = 0;
-                    jsonData.forEach(row => {
-                        const keys = Object.keys(row);
-                        const getVal = (patterns) => {
-                            const key = keys.find(k => patterns.some(p => k.toLowerCase().includes(p)));
-                            return key ? row[key] : null;
-                        };
-                        const entity = getVal(['entité', 'entity', 'compte']) || 'Import';
-                        const name = getVal(['nom', 'name', 'actif']) || 'Inconnu';
-                        let dateRaw = getVal(['date', 'time']);
-                        let date = new Date().toISOString().split('T')[0];
-                        if (dateRaw) {
-                            if (typeof dateRaw === 'number') date = new Date(Math.round((dateRaw - 25569)*86400*1000)).toISOString().split('T')[0];
-                            else { const d = new Date(dateRaw); if(!isNaN(d)) date = d.toISOString().split('T')[0]; }
-                        }
-                        const amount = parseFloat(getVal(['montant', 'amount', 'prix'])) || 0;
-                        const ret = parseFloat(getVal(['rendement', 'return', '%'])) || 0;
-
-                        if (amount > 0) {
-                            investments.push({ entity, name, date, amount, return: ret });
-                            count++;
-                        }
-                    });
-                    updateAll();
-                    showToast(`${count} investissements importés !`);
-                } catch (err) { console.error(err); showToast('Erreur lors de la lecture.', 'error'); }
-                document.getElementById('fileInput').value = '';
+            reader.onload = function(evt) {
+                const data = new Uint8Array(evt.target.result);
+                const wb = XLSX.read(data, {type:'array'});
+                const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                let count = 0;
+                json.forEach(row => {
+                    const tx = {
+                        date: row['Date_Entrée'] || row['Date'] || new Date().toISOString().split('T')[0],
+                        op: row['Type'] || 'Achat',
+                        name: row['Nom_Actif'] || row['Nom'] || 'Inconnu',
+                        ticker: row['Ticker'] || '',
+                        account: row['Compte'] || '',
+                        sector: row['Secteur'] || '',
+                        qty: parseFloat(row['Quantité']) || 0,
+                        price: parseFloat(row['PRU_Moyen']) || parseFloat(row['Prix']) || 0
+                    };
+                    if(tx.qty > 0 || tx.price > 0) { transactions.push(tx); count++; }
+                });
+                saveTxLocal();
+                showToast(`${count} transactions importées`);
+                renderTxTable();
             };
             reader.readAsArrayBuffer(file);
-        }
-
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            const msg = document.getElementById('toastMsg');
-            const icon = toast.querySelector('i');
-            msg.textContent = message;
-            if (type === 'error') icon.className = 'fa-solid fa-triangle-exclamation text-red-400';
-            else icon.className = 'fa-solid fa-check-circle text-green-400';
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => { toast.classList.add('translate-y-20', 'opacity-0'); }, 3000);
         }
     </script>
 </body>
 </html>
-
