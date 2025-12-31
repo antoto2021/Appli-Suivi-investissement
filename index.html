@@ -3,51 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="apple-mobile-web-app-title" content="Suivi Investissement">
-    <link rel="apple-touch-icon" href="icon2.png">
-    <link rel="icon" type="image/png" href="icon2.png">
-    <title>Suivi Investissement</title>
+    <title>InvestTrack V5</title>
     
-    <!-- Tailwind CSS -->
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Bibliothèques Externes (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
-    
-    <!-- SheetJS (Excel) -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-    
-    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <style>
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .chart-container { position: relative; height: 350px; width: 100%; }
-        .card-hover:hover { transform: translateY(-5px); transition: all 0.3s ease; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-        .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        
-        /* Input discret pour le prix */
-        .price-input {
-            background: rgba(255, 255, 255, 0.5);
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            border-radius: 4px;
-            padding: 2px 4px;
-            font-family: monospace;
-            width: 80px;
-            text-align: right;
-            transition: all 0.2s;
-        }
-        .price-input:focus {
-            background: white;
-            outline: 2px solid #3b82f6;
-            border-color: transparent;
-        }
-    </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
 
@@ -55,12 +21,12 @@
     <nav class="bg-white shadow-md sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
-                <div class="flex items-center cursor-pointer" onclick="showSection('home')">
+                <div class="flex items-center cursor-pointer" onclick="app.nav('home')">
                     <i class="fa-solid fa-chart-line text-blue-600 text-2xl mr-3"></i>
-                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">Bourse 3000 🚀</h1>
+                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">InvestTrack <span class="text-xs bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-2 py-0.5 rounded-full ml-2 shadow-sm">V5</span></h1>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <button onclick="showSection('home')" class="p-2 text-gray-500 hover:text-blue-600 transition" title="Accueil">
+                    <button onclick="app.nav('home')" class="p-2 text-gray-500 hover:text-blue-600 transition" title="Accueil">
                         <i class="fa-solid fa-house text-xl"></i>
                     </button>
                 </div>
@@ -68,152 +34,126 @@
         </div>
     </nav>
 
-    <!-- MAIN CONTENT -->
+    <!-- Contenu Principal -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-screen">
 
-        <!-- SECTION 1: HOME -->
+        <!-- SECTION 1: ACCUEIL -->
         <section id="home-view" class="animate-fade-in block">
             <div class="text-center mb-10">
                 <h2 class="text-3xl font-bold text-gray-800">Tableau de bord Investisseur</h2>
-                <p class="text-gray-500 mt-2">Gérez votre patrimoine avec précision</p>
+                <p class="text-gray-500 mt-2">Pilotez votre patrimoine financier</p>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-                <div onclick="showSection('dashboard')" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 cursor-pointer card-hover group">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="p-4 bg-blue-50 rounded-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition"><i class="fa-solid fa-gauge-high text-3xl"></i></div>
-                        <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-blue-500"></i>
+                <div onclick="app.nav('dashboard')" class="menu-card group">
+                    <div class="menu-icon-container bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white">
+                        <i class="fa-solid fa-gauge-high text-3xl"></i>
                     </div>
-                    <h3 class="text-xl font-bold text-gray-800 mb-2">Dashboard</h3>
-                    <p class="text-gray-500 text-sm">KPIs calculés sur vos prix de marché actuels.</p>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-1">Dashboard</h3>
+                        <p class="text-gray-500 text-sm">Vue d'ensemble et KPIs temps réel.</p>
+                    </div>
                 </div>
 
-                <div onclick="showSection('assets')" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 cursor-pointer card-hover group">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="p-4 bg-indigo-50 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition"><i class="fa-solid fa-layer-group text-3xl"></i></div>
-                        <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-indigo-500"></i>
+                <div onclick="app.nav('assets')" class="menu-card group">
+                    <div class="menu-icon-container bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white">
+                        <i class="fa-solid fa-layer-group text-3xl"></i>
                     </div>
-                    <h3 class="text-xl font-bold text-gray-800 mb-2">Résumé Actifs & Prix</h3>
-                    <p class="text-gray-500 text-sm"><span class="text-emerald-600 font-bold">Nouveau :</span> Mettez à jour les cours actuels ici.</p>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-1">Résumé Actifs</h3>
+                        <p class="text-gray-500 text-sm">Mise à jour des prix et suivi par ligne.</p>
+                    </div>
                 </div>
 
-                <div onclick="showSection('transactions')" class="bg-white p-8 rounded-2xl shadow-sm border border-blue-200 ring-2 ring-blue-50 cursor-pointer card-hover group">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="p-4 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-200 group-hover:scale-110 transition"><i class="fa-solid fa-list-check text-3xl"></i></div>
-                        <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-blue-600"></i>
+                <div onclick="app.nav('transactions')" class="menu-card group ring-2 ring-blue-50 border-blue-200">
+                    <div class="menu-icon-container bg-blue-600 text-white shadow-lg shadow-blue-200">
+                        <i class="fa-solid fa-list-check text-3xl"></i>
                     </div>
-                    <h3 class="text-xl font-bold text-gray-800 mb-2">Transactions</h3>
-                    <p class="text-gray-500 text-sm">Journal complet, Édition, Import & Export Excel.</p>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-1">Transactions <span class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full ml-1">Cœur</span></h3>
+                        <p class="text-gray-500 text-sm">Journal, Import Excel, Ajout/Modif.</p>
+                    </div>
                 </div>
 
-                <div onclick="showSection('projections')" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 cursor-pointer card-hover group">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="p-4 bg-purple-50 rounded-xl text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition"><i class="fa-solid fa-chart-area text-3xl"></i></div>
-                        <i class="fa-solid fa-arrow-right text-gray-300 group-hover:text-purple-500"></i>
+                <div onclick="app.nav('projections')" class="menu-card group">
+                    <div class="menu-icon-container bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white">
+                        <i class="fa-solid fa-chart-area text-3xl"></i>
                     </div>
-                    <h3 class="text-xl font-bold text-gray-800 mb-2">Projections</h3>
-                    <p class="text-gray-500 text-sm">Intérêts composés & Dividendes futurs.</p>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-1">Projections</h3>
+                        <p class="text-gray-500 text-sm">Futur estimé selon votre performance réelle.</p>
+                    </div>
                 </div>
             </div>
         </section>
 
         <!-- SECTION 2: DASHBOARD -->
         <section id="dashboard-view" class="hidden animate-fade-in">
-            <div class="mb-6 flex items-center gap-2 text-gray-500 text-sm">
-                <span onclick="showSection('home')" class="cursor-pointer hover:underline hover:text-blue-600">Accueil</span>
-                <i class="fa-solid fa-chevron-right text-xs"></i>
-                <span class="font-semibold text-blue-600">Dashboard</span>
+            <div class="breadcrumb">
+                <span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Dashboard</span>
             </div>
 
-            <!-- KPI Cards -->
+            <!-- KPIs -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Total Investi (PRU)</p>
-                            <p class="text-2xl font-bold text-gray-800" id="kpiTotal">0,00 €</p>
-                        </div>
-                        <div class="p-3 bg-blue-50 rounded-full text-blue-600"><i class="fa-solid fa-wallet text-xl"></i></div>
-                    </div>
+                <div class="kpi-card border-l-4 border-blue-500">
+                    <p class="label">Total Investi (PRU)</p>
+                    <p class="value" id="kpiTotal">0,00 €</p>
+                    <div class="icon bg-blue-50 text-blue-600"><i class="fa-solid fa-wallet"></i></div>
                 </div>
-                <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Valeur Actuelle (Marché)</p>
-                            <p class="text-2xl font-bold text-gray-800" id="kpiFuture">0,00 €</p>
-                            <p class="text-xs text-gray-400 mt-1" id="kpiDiff">PV: 0.00 €</p>
-                        </div>
-                        <div class="p-3 bg-purple-50 rounded-full text-purple-600"><i class="fa-solid fa-chart-line text-xl"></i></div>
-                    </div>
+                <div class="kpi-card border-l-4 border-purple-500">
+                    <p class="label">Valeur Actuelle</p>
+                    <p class="value" id="kpiFuture">0,00 €</p>
+                    <p class="sub-value" id="kpiDiff">PV: 0.00 €</p>
+                    <div class="icon bg-purple-50 text-purple-600"><i class="fa-solid fa-chart-line"></i></div>
                 </div>
-                <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Performance Globale</p>
-                            <p class="text-2xl font-bold text-gray-800" id="kpiReturn">0.00 %</p>
-                        </div>
-                        <div class="p-3 bg-green-50 rounded-full text-green-600"><i class="fa-solid fa-percent text-xl"></i></div>
-                    </div>
+                <div class="kpi-card border-l-4 border-green-500">
+                    <p class="label">Performance</p>
+                    <p class="value" id="kpiReturn">0.00 %</p>
+                    <div class="icon bg-green-50 text-green-600"><i class="fa-solid fa-percent"></i></div>
                 </div>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div class="bg-white p-6 rounded-xl shadow-sm">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Répartition par Compte</h3>
-                    <div class="chart-container">
-                        <canvas id="pieChart"></canvas>
-                    </div>
+                    <h3 class="chart-title">Répartition par Compte</h3>
+                    <div class="chart-container"><canvas id="pieChart"></canvas></div>
                 </div>
                 <!-- Conseil du jour -->
                 <div class="bg-white p-6 rounded-xl shadow-sm flex flex-col justify-center items-center text-center relative overflow-hidden">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-yellow-50 rounded-bl-full -mr-10 -mt-10"></div>
-                    <div class="p-6 bg-yellow-100 rounded-full mb-4 text-yellow-600 z-10">
-                        <i class="fa-regular fa-lightbulb text-4xl"></i>
-                    </div>
+                    <div class="p-6 bg-yellow-100 rounded-full mb-4 text-yellow-600 z-10"><i class="fa-regular fa-lightbulb text-4xl"></i></div>
                     <h3 class="text-xl font-bold text-gray-800 z-10">Conseil du jour</h3>
                     <p class="text-gray-600 mt-2 max-w-sm italic z-10" id="dailyTip">Chargement...</p>
                 </div>
             </div>
         </section>
 
-        <!-- SECTION 3: RESUME ACTIFS (Editable Prices) -->
+        <!-- SECTION 3: RESUME ACTIFS -->
         <section id="assets-view" class="hidden animate-fade-in">
-            <div class="mb-6 flex items-center justify-between">
-                <div class="flex items-center gap-2 text-gray-500 text-sm">
-                    <span onclick="showSection('home')" class="cursor-pointer hover:underline hover:text-blue-600">Accueil</span>
-                    <i class="fa-solid fa-chevron-right text-xs"></i>
-                    <span class="font-semibold text-indigo-600">Résumé Actifs</span>
+            <div class="flex justify-between items-center mb-6">
+                <div class="breadcrumb">
+                    <span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Résumé Actifs</span>
                 </div>
                 <div class="bg-blue-50 text-blue-700 px-3 py-1 rounded text-xs border border-blue-200">
-                    <i class="fa-solid fa-info-circle mr-1"></i> Modifiez les "Cours Actuel" ci-dessous pour mettre à jour vos performances.
+                    <i class="fa-solid fa-info-circle mr-1"></i> Modifiez les prix pour mettre à jour la performance.
                 </div>
             </div>
-
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="assetsGrid">
-                <!-- JS generated -->
+                <!-- Cartes générées par JS -->
             </div>
         </section>
 
         <!-- SECTION 4: TRANSACTIONS -->
         <section id="transactions-view" class="hidden animate-fade-in">
-            <div class="mb-6 flex justify-between items-end">
-                <div class="flex items-center gap-2 text-gray-500 text-sm">
-                    <span onclick="showSection('home')" class="cursor-pointer hover:underline hover:text-blue-600">Accueil</span>
-                    <i class="fa-solid fa-chevron-right text-xs"></i>
-                    <span class="font-semibold text-blue-600">Transactions</span>
+            <div class="flex justify-between items-end mb-6">
+                <div class="breadcrumb">
+                    <span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Transactions</span>
                 </div>
-                
                 <div class="flex gap-2">
-                    <button onclick="openModal('new')" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition flex items-center gap-2">
-                        <i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Nouveau</span>
-                    </button>
-                    <button onclick="document.getElementById('fileInput').click()" class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-4 py-2 rounded-lg hover:bg-emerald-100 transition flex items-center gap-2">
-                        <i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importer</span>
-                    </button>
-                    <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls, .csv" onchange="handleImport(event)">
-                    <button onclick="exportToExcel()" class="bg-gray-50 text-gray-600 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-100 transition">
-                        <i class="fa-solid fa-download"></i>
-                    </button>
+                    <button onclick="app.openModal('new')" class="btn-primary"><i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Nouveau</span></button>
+                    <button onclick="document.getElementById('fileInput').click()" class="btn-secondary text-emerald-600 border-emerald-200 hover:bg-emerald-50"><i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importer</span></button>
+                    <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls, .csv" onchange="app.handleImport(event)">
+                    <button onclick="app.exportExcel()" class="btn-secondary"><i class="fa-solid fa-download"></i></button>
                 </div>
             </div>
 
@@ -232,9 +172,7 @@
                                 <th class="px-4 py-3 text-center">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            <!-- JS Generated -->
-                        </tbody>
+                        <tbody class="divide-y divide-gray-100"></tbody>
                     </table>
                 </div>
                 <div id="emptyState" class="hidden p-8 text-center text-gray-400">
@@ -246,104 +184,85 @@
 
         <!-- SECTION 5: PROJECTIONS -->
         <section id="projections-view" class="hidden animate-fade-in">
-            <div class="mb-6 flex justify-between items-center">
-                <div class="flex items-center gap-2 text-gray-500 text-sm">
-                    <span onclick="showSection('home')" class="cursor-pointer hover:underline hover:text-blue-600">Accueil</span>
-                    <i class="fa-solid fa-chevron-right text-xs"></i>
-                    <span class="font-semibold text-purple-600">Projections</span>
+            <div class="flex justify-between items-center mb-6">
+                <div class="breadcrumb">
+                    <span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Projections</span>
                 </div>
-                <button onclick="showSection('dividends')" class="bg-emerald-50 text-emerald-600 border border-emerald-200 px-4 py-2 rounded-lg hover:bg-emerald-100 transition text-sm font-medium">
-                    <i class="fa-solid fa-coins mr-1"></i> Suivi des Dividendes
-                </button>
+                <button onclick="app.nav('dividends')" class="btn-secondary text-emerald-600 border-emerald-200"><i class="fa-solid fa-coins mr-1"></i> Dividendes</button>
             </div>
 
             <div class="bg-white p-6 rounded-xl shadow-sm mb-8">
                 <div class="flex justify-between items-center mb-4 border-b pb-2">
                     <div>
                         <h3 class="text-lg font-bold text-gray-800">Projection Patrimoniale</h3>
-                        <p class="text-xs text-gray-500">Basé sur historique + intérêts composés</p>
+                        <p class="text-xs text-gray-500">Basée sur votre performance historique réelle</p>
                     </div>
                     <div class="flex items-center gap-2">
-                        <label class="text-sm text-gray-600">Horizon (ans):</label>
-                        <input type="number" id="projYears" value="20" class="w-16 border rounded text-center focus:ring-2 focus:ring-purple-500 outline-none" onchange="renderProjections()">
+                        <label class="text-sm text-gray-600">Horizon:</label>
+                        <input type="number" id="projYears" value="20" class="w-16 border rounded text-center" onchange="app.renderProjections()">
                     </div>
                 </div>
-                <div class="chart-container" style="height: 400px;">
-                    <canvas id="mainProjectionChart"></canvas>
-                </div>
+                <div class="chart-container" style="height: 400px;"><canvas id="mainProjectionChart"></canvas></div>
             </div>
 
-            <!-- Les graphiques manquants de la V4 sont restaurés ici -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div class="bg-white p-6 rounded-xl shadow-sm">
-                    <h3 class="text-sm font-bold text-gray-700 mb-4">Investissement Annuel (Cashflow)</h3>
-                    <div class="chart-container">
-                        <canvas id="yearlyBarChart"></canvas>
-                    </div>
+                    <h3 class="chart-title">Investissement Annuel</h3>
+                    <div class="chart-container"><canvas id="yearlyBarChart"></canvas></div>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-sm">
-                    <h3 class="text-sm font-bold text-gray-700 mb-4">Fréquence d'Opérations</h3>
-                    <div class="chart-container">
-                        <canvas id="frequencyChart"></canvas>
-                    </div>
+                    <h3 class="chart-title">Fréquence d'Opérations</h3>
+                    <div class="chart-container"><canvas id="frequencyChart"></canvas></div>
                 </div>
             </div>
         </section>
 
         <!-- SECTION 6: DIVIDENDES -->
         <section id="dividends-view" class="hidden animate-fade-in">
-            <div class="mb-6 flex items-center gap-2 text-gray-500 text-sm">
-                <span onclick="showSection('projections')" class="cursor-pointer hover:underline hover:text-purple-600">Projections</span>
-                <i class="fa-solid fa-chevron-right text-xs"></i>
-                <span class="font-semibold text-emerald-600">Dividendes</span>
+            <div class="breadcrumb mb-6">
+                <span onclick="app.nav('projections')">Projections</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Dividendes</span>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="dividendCards"></div>
-            <div id="noDividends" class="hidden text-center py-10"><p class="text-gray-400">Aucun actif à dividende détecté.</p></div>
+            <div id="noDividends" class="hidden text-center py-10 text-gray-400">Aucun actif à dividende détecté.</div>
         </section>
 
     </main>
 
-    <!-- Modal Formulaire Transaction -->
+    <!-- Modal Formulaire -->
     <div id="modalForm" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-[100] flex justify-center items-center backdrop-blur-sm px-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all scale-100 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-6 border-b pb-4">
-                <h3 class="text-xl font-bold text-gray-800" id="modalTitle">Nouvelle Transaction</h3>
-                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+                <h3 class="text-xl font-bold text-gray-800" id="modalTitle">Transaction</h3>
+                <button onclick="app.closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
             </div>
-            
-            <form id="txForm" onsubmit="event.preventDefault(); saveTransaction();" class="space-y-4">
+            <form id="txForm" onsubmit="event.preventDefault(); app.saveTransaction();" class="space-y-4">
                 <input type="hidden" id="editIndex">
                 <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-xs font-bold text-gray-500 mb-1">Date</label><input type="date" id="fDate" required class="w-full p-2 border rounded-lg"></div>
+                    <div><label class="form-label">Date</label><input type="date" id="fDate" required class="form-input"></div>
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">Opération</label>
-                        <select id="fOp" class="w-full p-2 border rounded-lg">
+                        <label class="form-label">Opération</label>
+                        <select id="fOp" class="form-input">
                             <option value="Achat">Achat</option><option value="Vente">Vente</option><option value="Dividende">Dividende</option>
                         </select>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
+                    <div><label class="form-label">Nom Actif</label><input type="text" id="fName" required class="form-input" placeholder="ex: Total"></div>
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">Nom Actif</label>
-                        <input type="text" id="fName" required class="w-full p-2 border rounded-lg" placeholder="ex: Total">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">Ticker</label>
+                        <label class="form-label">Ticker</label>
                         <div class="flex gap-2">
-                            <input type="text" id="fTicker" class="w-full p-2 border rounded-lg" placeholder="ex: TTE.PA">
-                            <button type="button" onclick="searchTickerOnWeb()" class="bg-blue-100 text-blue-600 px-3 rounded-lg hover:bg-blue-200 transition" title="Rechercher sur Google">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-                            </button>
+                            <input type="text" id="fTicker" class="form-input" placeholder="ex: TTE.PA">
+                            <button type="button" onclick="app.searchTicker()" class="bg-blue-100 text-blue-600 px-3 rounded hover:bg-blue-200"><i class="fa-solid fa-search"></i></button>
                         </div>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-xs font-bold text-gray-500 mb-1">Compte</label><input type="text" id="fAccount" class="w-full p-2 border rounded-lg"></div>
-                    <div><label class="block text-xs font-bold text-gray-500 mb-1">Secteur</label><input type="text" id="fSector" class="w-full p-2 border rounded-lg"></div>
+                    <div><label class="form-label">Compte</label><input type="text" id="fAccount" class="form-input"></div>
+                    <div><label class="form-label">Secteur</label><input type="text" id="fSector" class="form-input"></div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-xs font-bold text-gray-500 mb-1">Quantité</label><input type="number" id="fQty" step="0.0001" class="w-full p-2 border rounded-lg"></div>
-                    <div><label class="block text-xs font-bold text-gray-500 mb-1">Prix U. / PRU (€)</label><input type="number" id="fPrice" step="0.01" class="w-full p-2 border rounded-lg"></div>
+                    <div><label class="form-label">Quantité</label><input type="number" id="fQty" step="0.0001" class="form-input"></div>
+                    <div><label class="form-label">Prix U. (€)</label><input type="number" id="fPrice" step="0.01" class="form-input"></div>
                 </div>
                 <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition mt-6">Enregistrer</button>
             </form>
@@ -352,498 +271,11 @@
 
     <!-- Toast -->
     <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
-        <i class="fa-solid fa-check-circle text-green-400"></i><span id="toastMsg">Opération réussie</span>
+        <i class="fa-solid fa-check-circle text-green-400"></i><span id="toastMsg">Notif</span>
     </div>
 
-    <script>
-        // --- 1. CONFIG & STATE ---
-        let transactions = [];
-        let currentPrices = {}; // Stocke les prix actuels { "Action Vinci": 105.20, ... }
-        let charts = {};
-        
-        // Mock Dividendes
-        const mockDividends = { 'Action Vinci': {current: 4.5}, 'Total Energie': {current: 3.2}, 'Accor': {current: 1.1}, 'Mercedes': {current: 5.3}, 'Neurones': {current: 1.2}, 'DEFAULT': {current: 0} };
-        const tips = [ "La diversification est la seule gratuité en finance.", "L'intérêt composé est la 8ème merveille du monde.", "Le temps est votre meilleur allié.", "Achetez quand le sang coule dans les rues.", "Réinvestissez toujours vos dividendes.", "N'investissez que ce que vous pouvez perdre." ];
-
-        // --- TICKER AUTO-FILL DATABASE ---
-        const tickerMapping = {
-            // CAC 40
-            'accor': 'AC.PA', 'air liquide': 'AI.PA', 'airbus': 'AIR.PA', 'arcelormittal': 'MT.AS', 'axa': 'CS.PA',
-            'bnp paribas': 'BNP.PA', 'bouygues': 'EN.PA', 'capgemini': 'CAP.PA', 'carrefour': 'CA.PA', 'credit agricole': 'ACA.PA',
-            'danone': 'BN.PA', 'dassault systemes': 'DSY.PA', 'edenred': 'EDEN.PA', 'engie': 'ENGI.PA', 'essilor': 'EL.PA',
-            'hermes': 'RMS.PA', 'kering': 'KER.PA', 'legrand': 'LR.PA', 'l\'oreal': 'OR.PA', 'loreal': 'OR.PA',
-            'lvmh': 'MC.PA', 'michelin': 'ML.PA', 'orange': 'ORA.PA', 'pernod ricard': 'RI.PA', 'publicis': 'PUB.PA',
-            'renault': 'RNO.PA', 'safran': 'SAF.PA', 'saint gobain': 'SGO.PA', 'sanofi': 'SAN.PA', 'schneider electric': 'SU.PA',
-            'societe generale': 'GLE.PA', 'stellantis': 'STLA.PA', 'stmicroelectronics': 'STMPA.PA', 'teleperformance': 'TEP.PA',
-            'thales': 'HO.PA', 'total': 'TTE.PA', 'totalenergies': 'TTE.PA', 'total energie': 'TTE.PA', 'uniibail': 'URW.AS',
-            'veolia': 'VIE.PA', 'vinci': 'DG.PA', 'action vinci': 'DG.PA', 'vivendi': 'VIV.PA', 'worldline': 'WLN.PA',
-            // US / TECH
-            'apple': 'AAPL', 'microsoft': 'MSFT', 'google': 'GOOGL', 'alphabet': 'GOOGL', 'amazon': 'AMZN', 'tesla': 'TSLA',
-            'meta': 'META', 'facebook': 'META', 'nvidia': 'NVDA', 'netflix': 'NFLX', 'cocacola': 'KO', 'pepsi': 'PEP',
-            'mcdonalds': 'MCD', 'visa': 'V', 'mastercard': 'MA', 'disney': 'DIS', 'pfizer': 'PFE', 'johnson': 'JNJ',
-            // ETF COMMUNS
-            'cw8': 'CW8.PA', 'ewld': 'EWLD.PA', 'sp500': 'SP500', 'nasdaq': 'UST.PA', 'cac40': 'PX1.PA',
-            'ishares physical gold': 'IGLN.L', 'or': 'IGLN.L', 'gold': 'IGLN.L'
-        };
-
-        // --- 2. INIT ---
-        document.addEventListener('DOMContentLoaded', () => {
-            loadData();
-            loadDailyTip();
-            setupAutoFill();
-        });
-
-        function setupAutoFill() {
-            const nameInput = document.getElementById('fName');
-            const tickerInput = document.getElementById('fTicker');
-            
-            nameInput.addEventListener('blur', () => {
-                const val = nameInput.value.toLowerCase().trim();
-                // Recherche simple
-                if (tickerMapping[val]) {
-                    tickerInput.value = tickerMapping[val];
-                    // Petit effet visuel
-                    tickerInput.classList.add('bg-green-50');
-                    setTimeout(() => tickerInput.classList.remove('bg-green-50'), 1000);
-                } else {
-                    // Recherche partielle (ex: "Total" dans "Total Energies")
-                    const foundKey = Object.keys(tickerMapping).find(k => val.includes(k));
-                    if(foundKey) {
-                        tickerInput.value = tickerMapping[foundKey];
-                    }
-                }
-            });
-        }
-
-        function searchTickerOnWeb() {
-            const name = document.getElementById('fName').value;
-            if(!name) {
-                alert("Veuillez d'abord saisir un nom d'actif.");
-                return;
-            }
-            window.open(`https://www.google.com/search?q=ticker+${encodeURIComponent(name)}`, '_blank');
-        }
-
-        function showSection(id) {
-            document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
-            document.getElementById(id + '-view').classList.remove('hidden');
-            
-            // Render logic
-            if(id === 'dashboard') { calculateGlobalKPIs(); renderPieChart(); }
-            if(id === 'assets') renderAssetsGrid();
-            if(id === 'transactions') renderTxTable();
-            if(id === 'projections') renderProjections();
-            if(id === 'dividends') renderDividends();
-            
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        // --- 3. DATA LOGIC ---
-        function loadData() {
-            // Transactions
-            const txStored = localStorage.getItem('invest_v4_tx');
-            if(txStored) transactions = JSON.parse(txStored);
-            else seedDemoData();
-
-            // Prices
-            const pricesStored = localStorage.getItem('invest_v4_prices');
-            if(pricesStored) currentPrices = JSON.parse(pricesStored);
-        }
-
-        function saveData() {
-            localStorage.setItem('invest_v4_tx', JSON.stringify(transactions));
-            localStorage.setItem('invest_v4_prices', JSON.stringify(currentPrices));
-        }
-
-        function seedDemoData() {
-            transactions = [
-                {date:'2024-01-31', op:'Achat', name:'Action Vinci', account:'PEA', qty:15, price:93.53, sector:'Industrie'},
-                {date:'2024-11-12', op:'Achat', name:'Total Energie', account:'CTO', qty:5, price:60.32, sector:'Energie'},
-                {date:'2025-05-06', op:'Achat', name:'Accor', account:'PEA', qty:20, price:42.00, sector:'Tourisme'}
-            ];
-            // Initialize prices with PRU as fallback
-            transactions.forEach(t => { if(t.op==='Achat') currentPrices[t.name] = t.price; });
-            saveData();
-        }
-
-        // --- 4. ASSETS & PRICES LOGIC ---
-        
-        function updateAssetPrice(assetName, newPrice) {
-            currentPrices[assetName] = parseFloat(newPrice);
-            saveData();
-            // Re-render to update calculations immediately
-            renderAssetsGrid();
-            showToast("Prix mis à jour !");
-        }
-
-        function calculatePortfolioState() {
-            const assets = {};
-            let totalInvested = 0; // PRU Total
-
-            transactions.forEach(tx => {
-                if(tx.op === 'Dividende') return; // On traite les dividendes séparément si besoin
-                
-                if(!assets[tx.name]) assets[tx.name] = { name: tx.name, qty: 0, invested: 0, ticker: tx.ticker };
-                
-                if(tx.op === 'Achat') {
-                    assets[tx.name].qty += tx.qty;
-                    assets[tx.name].invested += (tx.qty * tx.price);
-                } else if(tx.op === 'Vente') {
-                    assets[tx.name].qty -= tx.qty;
-                    // Sortie au PRU moyen pour simplifier le calcul de l'investi restant
-                    const currentPRU = assets[tx.name].invested / (assets[tx.name].qty + tx.qty); 
-                    assets[tx.name].invested -= (tx.qty * currentPRU);
-                }
-            });
-
-            return assets;
-        }
-
-        function calculateGlobalKPIs() {
-            const assets = calculatePortfolioState();
-            let totalInvested = 0;
-            let totalCurrentValue = 0;
-
-            Object.values(assets).forEach(a => {
-                if(a.qty < 0.001) return;
-                totalInvested += a.invested;
-                
-                const price = currentPrices[a.name] || (a.invested / a.qty); // Fallback PRU
-                totalCurrentValue += (a.qty * price);
-            });
-
-            const diff = totalCurrentValue - totalInvested;
-            const perf = totalInvested > 0 ? (diff / totalInvested) * 100 : 0;
-
-            document.getElementById('kpiTotal').textContent = totalInvested.toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
-            document.getElementById('kpiFuture').textContent = totalCurrentValue.toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
-            
-            const kpiDiffEl = document.getElementById('kpiDiff');
-            kpiDiffEl.textContent = `${diff >= 0 ? '+' : ''}${diff.toLocaleString('fr-FR', {style:'currency', currency:'EUR'})}`;
-            kpiDiffEl.className = diff >= 0 ? 'text-xs mt-1 text-green-600 font-bold' : 'text-xs mt-1 text-red-500 font-bold';
-
-            const kpiRetEl = document.getElementById('kpiReturn');
-            kpiRetEl.textContent = `${perf >= 0 ? '+' : ''}${perf.toFixed(2)} %`;
-            kpiRetEl.className = perf >= 0 ? 'text-2xl font-bold text-green-600' : 'text-2xl font-bold text-red-500';
-        }
-
-        // --- 5. RENDERERS ---
-
-        function renderAssetsGrid() {
-            const container = document.getElementById('assetsGrid');
-            container.innerHTML = '';
-            const assets = calculatePortfolioState();
-
-            Object.values(assets).forEach(a => {
-                if(a.qty < 0.001) return;
-                
-                const pru = a.invested / a.qty;
-                const currentPrice = currentPrices[a.name] || pru;
-                const currentValue = a.qty * currentPrice;
-                const perf = ((currentValue - a.invested) / a.invested) * 100;
-                
-                const colorBg = stringToColor(a.name, 95, 90);
-                const colorBorder = stringToColor(a.name, 60, 50);
-
-                const card = document.createElement('div');
-                card.className = "bg-white rounded-xl shadow-sm border overflow-hidden card-hover";
-                card.style.borderColor = colorBorder;
-                
-                card.innerHTML = `
-                    <div class="p-4 flex justify-between items-center" style="background-color: ${colorBg}">
-                        <h3 class="font-bold text-gray-800 truncate" style="color:${colorBorder}">${a.name}</h3>
-                        <span class="text-xs bg-white px-2 py-1 rounded font-mono font-bold text-gray-600">${a.ticker || ''}</span>
-                    </div>
-                    <div class="p-5">
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="text-gray-500 text-sm">Cours Actuel (€)</span>
-                            <input type="number" step="0.01" value="${currentPrice.toFixed(2)}" 
-                                onchange="updateAssetPrice('${a.name}', this.value)"
-                                class="price-input text-gray-800 font-bold" />
-                        </div>
-                        <div class="flex justify-between mb-1">
-                            <span class="text-gray-500 text-sm">PRU</span>
-                            <span class="font-mono text-gray-600">${pru.toFixed(2)} €</span>
-                        </div>
-                        <div class="flex justify-between mb-3 border-b border-dashed pb-2">
-                            <span class="text-gray-500 text-sm">Quantité</span>
-                            <span class="font-mono font-semibold">${a.qty.toFixed(2)}</span>
-                        </div>
-                        <div class="flex justify-between items-end">
-                            <div>
-                                <span class="text-xs text-gray-400">Valeur Totale</span>
-                                <div class="font-bold text-lg text-gray-800">${currentValue.toLocaleString('fr-FR', {style:'currency', currency:'EUR'})}</div>
-                            </div>
-                            <div class="text-right">
-                                <span class="block text-xs text-gray-400">Perf.</span>
-                                <span class="font-bold ${perf >= 0 ? 'text-green-600' : 'text-red-500'}">
-                                    ${perf >= 0 ? '+' : ''}${perf.toFixed(1)}%
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        function renderPieChart() {
-            const accData = {};
-            transactions.filter(t => t.op==='Achat').forEach(t => accData[t.account] = (accData[t.account] || 0) + (t.qty * t.price));
-            
-            const ctx = document.getElementById('pieChart').getContext('2d');
-            if(charts.pie) charts.pie.destroy();
-            charts.pie = new Chart(ctx, {
-                type: 'doughnut',
-                data: { labels: Object.keys(accData), datasets: [{ data: Object.values(accData), backgroundColor: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b'] }] },
-                options: { maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
-            });
-        }
-
-        function renderTxTable() {
-            const tbody = document.querySelector('#transactionsTable tbody');
-            tbody.innerHTML = '';
-            const sorted = [...transactions].sort((a,b) => new Date(b.date) - new Date(a.date));
-            if(sorted.length===0) document.getElementById('emptyState').classList.remove('hidden');
-            else document.getElementById('emptyState').classList.add('hidden');
-
-            sorted.forEach((tx, i) => {
-                const total = tx.op === 'Dividende' ? tx.price : (tx.qty * tx.price);
-                const originalIndex = transactions.indexOf(tx); // Get stable index for deletion/editing
-
-                const tr = document.createElement('tr');
-                tr.className = "bg-white border-b hover:bg-gray-50";
-                const badge = tx.op==='Achat' ? 'bg-blue-100 text-blue-800' : (tx.op==='Vente'?'bg-red-100 text-red-800':'bg-emerald-100 text-emerald-800');
-                
-                tr.innerHTML = `
-                    <td class="px-4 py-3 font-mono text-xs">${tx.date}</td>
-                    <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs ${badge}">${tx.op}</span></td>
-                    <td class="px-4 py-3 font-medium text-gray-800">${tx.name}</td>
-                    <td class="px-4 py-3 text-xs">${tx.account || '-'}</td>
-                    <td class="px-4 py-3 text-right font-mono">${tx.op==='Dividende'?'-':tx.qty}</td>
-                    <td class="px-4 py-3 text-right font-mono text-xs">${tx.price.toFixed(2)}</td>
-                    <td class="px-4 py-3 text-right font-bold text-gray-700">${total.toFixed(2)} €</td>
-                    <td class="px-4 py-3 text-center">
-                        <button onclick="openModal('edit', ${originalIndex})" class="text-blue-500 hover:text-blue-700 mx-1" title="Éditer"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="deleteTx(${originalIndex})" class="text-red-400 hover:text-red-600 mx-1" title="Supprimer"><i class="fa-solid fa-trash"></i></button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        function renderProjections() {
-            const years = parseInt(document.getElementById('projYears').value) || 20;
-            const labels = Array.from({length: years+1}, (_, i) => `An ${i}`);
-            
-            // 1. Calculer le rendement actuel réel (comme sur le dashboard)
-            const assets = calculatePortfolioState();
-            let totalInvested = 0;
-            let totalCurrentValue = 0;
-
-            Object.values(assets).forEach(a => {
-                if(a.qty < 0.001) return;
-                totalInvested += a.invested;
-                const price = currentPrices[a.name] || (a.invested / a.qty);
-                totalCurrentValue += (a.qty * price);
-            });
-
-            // Taux de croissance = Performance actuelle
-            let growthRate = 0.05; // Fallback par défaut si pas de données
-            if (totalInvested > 0) {
-                growthRate = (totalCurrentValue - totalInvested) / totalInvested;
-            }
-
-            // 2. Calcul du capital de départ (Cash investi)
-            let cap = 0;
-            transactions.forEach(t => { 
-                if(t.op==='Achat') cap += t.qty*t.price; 
-                if(t.op==='Vente') cap -= t.qty*t.price; 
-            });
-            
-            // 3. Projection
-            const data = [cap];
-            for(let i=1; i<=years; i++) {
-                // On applique le taux de rendement calculé
-                data.push(data[i-1] * (1 + growthRate));
-            }
-            
-            const rateLabel = (growthRate * 100).toFixed(2) + '%';
-
-            const ctx = document.getElementById('mainProjectionChart').getContext('2d');
-            if(charts.proj) charts.proj.destroy();
-            charts.proj = new Chart(ctx, {
-                type: 'line',
-                data: { 
-                    labels, 
-                    datasets: [{ 
-                        label: `Projection (Rendement appliqué : ${rateLabel})`, 
-                        data, 
-                        borderColor: '#9333ea', 
-                        fill: true, 
-                        backgroundColor: 'rgba(147, 51, 234, 0.1)' 
-                    }] 
-                },
-                options: { maintainAspectRatio: false }
-            });
-
-            renderYearlyBar();
-            renderFrequency();
-        }
-
-        function renderYearlyBar() {
-            const yData = {};
-            transactions.filter(t=>t.op==='Achat').forEach(t => {
-                const y = t.date.split('-')[0];
-                yData[y] = (yData[y]||0) + (t.qty*t.price);
-            });
-            
-            const ctx = document.getElementById('yearlyBarChart').getContext('2d');
-            if(charts.bar) charts.bar.destroy();
-            
-            charts.bar = new Chart(ctx, {
-                type: 'bar',
-                data: { 
-                    labels: Object.keys(yData).sort(), 
-                    datasets: [{ label:'Cashflow Investi', data:Object.values(yData), backgroundColor:'#10b981', borderRadius:4 }] 
-                },
-                options: { maintainAspectRatio: false }
-            });
-        }
-
-        function renderFrequency() {
-            let count = 0;
-            const data = transactions.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(t => ++count);
-            const labels = transactions.map(t=>t.date);
-            
-            const ctx = document.getElementById('frequencyChart').getContext('2d');
-            if(charts.freq) charts.freq.destroy();
-            charts.freq = new Chart(ctx, {
-                type: 'line',
-                data: { labels, datasets: [{ label:'Nombre Opérations', data, borderColor:'#6366f1', pointRadius:0 }] },
-                options: { maintainAspectRatio: false, scales: { x: { display: false } } }
-            });
-        }
-
-        function renderDividends() {
-            const container = document.getElementById('dividendCards');
-            container.innerHTML = '';
-            const assets = calculatePortfolioState();
-            let found = false;
-
-            Object.values(assets).forEach(a => {
-                if(a.qty < 0.01) return;
-                const info = mockDividends[a.name];
-                if(info && info.current > 0) {
-                    found = true;
-                    const annual = a.qty * info.current;
-                    const col = stringToColor(a.name, 95, 90);
-                    container.innerHTML += `
-                        <div class="bg-white rounded-xl shadow-sm border p-4" style="background:${col}">
-                            <div class="flex justify-between font-bold text-gray-800"><span>${a.name}</span><i class="fa-solid fa-coins text-yellow-600"></i></div>
-                            <div class="mt-4 flex justify-between items-end">
-                                <div><p class="text-xs text-gray-500">Annuel Est.</p><p class="text-xl font-bold text-emerald-700">${annual.toFixed(2)} €</p></div>
-                                <div class="text-right"><p class="text-xs text-gray-500">Unit.</p><p class="font-mono">${info.current} €</p></div>
-                            </div>
-                        </div>`;
-                }
-            });
-            if(!found) document.getElementById('noDividends').classList.remove('hidden');
-        }
-
-        // --- UTILS ---
-        function stringToColor(str, s, l) { let hash=0; for(let i=0;i<str.length;i++)hash=str.charCodeAt(i)+((hash<<5)-hash); return `hsl(${hash%360},${s}%,${l}%)`; }
-        function loadDailyTip() { document.getElementById('dailyTip').textContent = `"${tips[new Date().getDate() % tips.length]}"`; }
-        function showToast(msg) { const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; t.classList.remove('translate-y-20','opacity-0'); setTimeout(()=>t.classList.add('translate-y-20','opacity-0'),2000); }
-        
-        // --- FORMS & EXCEL ---
-        function openModal(mode, idx=null) {
-            document.getElementById('modalForm').classList.remove('hidden');
-            document.getElementById('editIndex').value = idx !== null ? idx : '';
-            
-            if(mode === 'new') {
-                document.getElementById('modalTitle').textContent = 'Nouvelle Transaction';
-                document.getElementById('fDate').value = new Date().toISOString().split('T')[0];
-                document.getElementById('fOp').value = 'Achat';
-                document.getElementById('fName').value = '';
-                document.getElementById('fTicker').value = '';
-                document.getElementById('fAccount').value = '';
-                document.getElementById('fSector').value = '';
-                document.getElementById('fQty').value = '';
-                document.getElementById('fPrice').value = '';
-            } else {
-                document.getElementById('modalTitle').textContent = 'Modifier Transaction';
-                const tx = transactions[idx];
-                document.getElementById('fDate').value = tx.date;
-                document.getElementById('fOp').value = tx.op;
-                document.getElementById('fName').value = tx.name;
-                document.getElementById('fTicker').value = tx.ticker || '';
-                document.getElementById('fAccount').value = tx.account || '';
-                document.getElementById('fSector').value = tx.sector || '';
-                document.getElementById('fQty').value = tx.qty;
-                document.getElementById('fPrice').value = tx.price;
-            }
-        }
-        
-        function closeModal() { document.getElementById('modalForm').classList.add('hidden'); }
-        
-        function saveTransaction() {
-            const idx = document.getElementById('editIndex').value;
-            const tx = {
-                date: document.getElementById('fDate').value,
-                op: document.getElementById('fOp').value,
-                name: document.getElementById('fName').value,
-                ticker: document.getElementById('fTicker').value,
-                account: document.getElementById('fAccount').value,
-                sector: document.getElementById('fSector').value,
-                qty: parseFloat(document.getElementById('fQty').value)||0,
-                price: parseFloat(document.getElementById('fPrice').value)||0
-            };
-            
-            if(idx !== '') {
-                transactions[idx] = tx; // Edit existing
-            } else {
-                transactions.push(tx); // Add new
-            }
-            
-            saveData(); 
-            closeModal(); 
-            showToast(idx !== '' ? "Modifié" : "Ajouté"); 
-            renderTxTable();
-        }
-
-        function deleteTx(i) { if(confirm('Supprimer ?')) { transactions.splice(i,1); saveData(); renderTxTable(); } }
-        function exportToExcel() { const ws=XLSX.utils.json_to_sheet(transactions); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Data"); XLSX.writeFile(wb,"Invest.xlsx"); }
-        
-        function handleImport(e) {
-            const r=new FileReader(); r.onload=ev=>{
-                const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
-                const json=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-                let count = 0;
-                json.forEach(row=>{
-                    let d = row['Date']||row['Date_Entrée'];
-                    if(typeof d==='number') d=new Date(Math.round((d-25569)*86400*1000)).toISOString().split('T')[0];
-                    
-                    const name = row['Nom actif'] || row['Nom_Actif'] || row['Nom'] || 'Inconnu';
-                    const op = row['Operation'] || row['Opération'] || row['Type'] || 'Achat';
-                    const price = parseFloat(row['Prix unitaire']) || parseFloat(row['Prix']) || parseFloat(row['PRU_Moyen']) || 0;
-                    const qty = parseFloat(row['Quantité']) || parseFloat(row['Qty']) || 0;
-
-                    transactions.push({
-                        date: d||new Date().toISOString().split('T')[0],
-                        op: op,
-                        name: name,
-                        ticker: row['Ticker']||'',
-                        account: row['Compte']||'',
-                        sector: row['Secteur']||'',
-                        qty: qty,
-                        price: price
-                    });
-                    count++;
-                });
-                saveData(); showToast(count+" importés"); renderTxTable();
-            }; r.readAsArrayBuffer(e.target.files[0]);
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
+
+
