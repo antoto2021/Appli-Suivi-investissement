@@ -3,20 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="apple-mobile-web-app-title" content="Levage Sécurisé">
+    <meta name="apple-mobile-web-app-title" content="Suivi Finance">
     <link rel="apple-touch-icon" href="icon2.png">
     <link rel="icon" type="image/png" href="icon2.png">
-
-    <title>InvestTrack V5</title>
+    <title>InvestTrack V5.1</title>
     
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
     
-    <!-- Bibliothèques Externes (CDN) -->
+    <!-- Bibliothèques Externes -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- Tesseract.js pour le scan OCR -->
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
@@ -27,7 +28,7 @@
             <div class="flex justify-between h-16">
                 <div class="flex items-center cursor-pointer" onclick="app.nav('home')">
                     <i class="fa-solid fa-chart-line text-blue-600 text-2xl mr-3"></i>
-                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">InvestTrack <span class="text-xs bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-2 py-0.5 rounded-full ml-2 shadow-sm">V5</span></h1>
+                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">InvestTrack <span class="text-xs bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-2 py-0.5 rounded-full ml-2 shadow-sm">V5.1</span></h1>
                 </div>
                 <div class="flex items-center space-x-3">
                     <button onclick="app.nav('home')" class="p-2 text-gray-500 hover:text-blue-600 transition" title="Accueil">
@@ -44,90 +45,95 @@
         <!-- SECTION 1: ACCUEIL -->
         <section id="home-view" class="animate-fade-in block">
             <div class="text-center mb-10">
-                <h2 class="text-3xl font-bold text-gray-800">Tableau de bord Investisseur</h2>
-                <p class="text-gray-500 mt-2">Pilotez votre patrimoine financier</p>
+                <h2 class="text-3xl font-bold text-gray-800">Tableau de bord</h2>
+                <p class="text-gray-500 mt-2">Gestion de Patrimoine & Budget</p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
+                <!-- 1. Dashboard -->
                 <div onclick="app.nav('dashboard')" class="menu-card group">
                     <div class="menu-icon-container bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white">
                         <i class="fa-solid fa-gauge-high text-3xl"></i>
                     </div>
                     <div>
                         <h3 class="text-xl font-bold text-gray-800 mb-1">Dashboard</h3>
-                        <p class="text-gray-500 text-sm">Vue d'ensemble et KPIs temps réel.</p>
+                        <p class="text-gray-500 text-sm">Vue d'ensemble et KPIs.</p>
                     </div>
                 </div>
 
+                <!-- 2. Résumé Actifs -->
                 <div onclick="app.nav('assets')" class="menu-card group">
                     <div class="menu-icon-container bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white">
                         <i class="fa-solid fa-layer-group text-3xl"></i>
                     </div>
                     <div>
                         <h3 class="text-xl font-bold text-gray-800 mb-1">Résumé Actifs</h3>
-                        <p class="text-gray-500 text-sm">Mise à jour des prix et suivi par ligne.</p>
+                        <p class="text-gray-500 text-sm">Suivi des positions et prix.</p>
                     </div>
                 </div>
 
+                <!-- 3. Transactions -->
                 <div onclick="app.nav('transactions')" class="menu-card group ring-2 ring-blue-50 border-blue-200">
                     <div class="menu-icon-container bg-blue-600 text-white shadow-lg shadow-blue-200">
                         <i class="fa-solid fa-list-check text-3xl"></i>
                     </div>
                     <div>
-                        <h3 class="text-xl font-bold text-gray-800 mb-1">Transactions <span class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full ml-1">Cœur</span></h3>
-                        <p class="text-gray-500 text-sm">Journal, Import Excel, Ajout/Modif.</p>
+                        <h3 class="text-xl font-bold text-gray-800 mb-1">Transactions Inv.</h3>
+                        <p class="text-gray-500 text-sm">Achats/Ventes d'actifs financiers.</p>
                     </div>
                 </div>
 
+                <!-- 4. Revenus/Dépenses (NOUVEAU) -->
+                <div onclick="app.nav('budget')" class="menu-card group border-emerald-200">
+                    <div class="menu-icon-container bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white">
+                        <i class="fa-solid fa-receipt text-3xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-1">Revenus/Dépenses</h3>
+                        <p class="text-gray-500 text-sm">Scanner bulletins & suivi budget.</p>
+                    </div>
+                </div>
+
+                <!-- 5. Projections -->
                 <div onclick="app.nav('projections')" class="menu-card group">
                     <div class="menu-icon-container bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white">
                         <i class="fa-solid fa-chart-area text-3xl"></i>
                     </div>
                     <div>
                         <h3 class="text-xl font-bold text-gray-800 mb-1">Projections</h3>
-                        <p class="text-gray-500 text-sm">Futur estimé selon votre performance réelle.</p>
+                        <p class="text-gray-500 text-sm">Futur estimé du patrimoine.</p>
                     </div>
                 </div>
             </div>
         </section>
 
+        <!-- ... (Les sections Dashboard, Assets, Transactions, Projections restent identiques à V5, masquées ici pour brièveté, elles sont dans le JS via navigation) ... -->
+        <!-- Je réintègre tout le code HTML des sections précédentes pour que le fichier soit complet -->
+
         <!-- SECTION 2: DASHBOARD -->
         <section id="dashboard-view" class="hidden animate-fade-in">
-            <div class="breadcrumb">
-                <span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Dashboard</span>
-            </div>
-
-            <!-- KPIs -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="breadcrumb"><span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Dashboard</span></div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 mt-4">
                 <div class="kpi-card border-l-4 border-blue-500">
-                    <p class="label">Total Investi (PRU)</p>
-                    <p class="value" id="kpiTotal">0,00 €</p>
+                    <p class="label">Total Investi</p><p class="value" id="kpiTotal">0,00 €</p>
                     <div class="icon bg-blue-50 text-blue-600"><i class="fa-solid fa-wallet"></i></div>
                 </div>
                 <div class="kpi-card border-l-4 border-purple-500">
-                    <p class="label">Valeur Actuelle</p>
-                    <p class="value" id="kpiFuture">0,00 €</p>
-                    <p class="sub-value" id="kpiDiff">PV: 0.00 €</p>
+                    <p class="label">Valeur Actuelle</p><p class="value" id="kpiFuture">0,00 €</p><p class="sub-value" id="kpiDiff">PV: 0.00 €</p>
                     <div class="icon bg-purple-50 text-purple-600"><i class="fa-solid fa-chart-line"></i></div>
                 </div>
                 <div class="kpi-card border-l-4 border-green-500">
-                    <p class="label">Performance</p>
-                    <p class="value" id="kpiReturn">0.00 %</p>
+                    <p class="label">Performance</p><p class="value" id="kpiReturn">0.00 %</p>
                     <div class="icon bg-green-50 text-green-600"><i class="fa-solid fa-percent"></i></div>
                 </div>
             </div>
-
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="bg-white p-6 rounded-xl shadow-sm">
-                    <h3 class="chart-title">Répartition par Compte</h3>
-                    <div class="chart-container"><canvas id="pieChart"></canvas></div>
-                </div>
-                <!-- Conseil du jour -->
+                <div class="bg-white p-6 rounded-xl shadow-sm"><h3 class="chart-title">Répartition</h3><div class="chart-container"><canvas id="pieChart"></canvas></div></div>
                 <div class="bg-white p-6 rounded-xl shadow-sm flex flex-col justify-center items-center text-center relative overflow-hidden">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-yellow-50 rounded-bl-full -mr-10 -mt-10"></div>
                     <div class="p-6 bg-yellow-100 rounded-full mb-4 text-yellow-600 z-10"><i class="fa-regular fa-lightbulb text-4xl"></i></div>
                     <h3 class="text-xl font-bold text-gray-800 z-10">Conseil du jour</h3>
-                    <p class="text-gray-600 mt-2 max-w-sm italic z-10" id="dailyTip">Chargement...</p>
+                    <p class="text-gray-600 mt-2 max-w-sm italic z-10" id="dailyTip">...</p>
                 </div>
             </div>
         </section>
@@ -135,104 +141,102 @@
         <!-- SECTION 3: RESUME ACTIFS -->
         <section id="assets-view" class="hidden animate-fade-in">
             <div class="flex justify-between items-center mb-6">
-                <div class="breadcrumb">
-                    <span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Résumé Actifs</span>
-                </div>
-                <div class="bg-blue-50 text-blue-700 px-3 py-1 rounded text-xs border border-blue-200">
-                    <i class="fa-solid fa-info-circle mr-1"></i> Modifiez les prix pour mettre à jour la performance.
-                </div>
+                <div class="breadcrumb"><span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Résumé Actifs</span></div>
+                <div class="bg-blue-50 text-blue-700 px-3 py-1 rounded text-xs border border-blue-200"><i class="fa-solid fa-info-circle mr-1"></i> Modifiez les prix pour mettre à jour.</div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="assetsGrid">
-                <!-- Cartes générées par JS -->
-            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="assetsGrid"></div>
         </section>
 
-        <!-- SECTION 4: TRANSACTIONS -->
+        <!-- SECTION 4: TRANSACTIONS (INVEST) -->
         <section id="transactions-view" class="hidden animate-fade-in">
             <div class="flex justify-between items-end mb-6">
-                <div class="breadcrumb">
-                    <span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Transactions</span>
-                </div>
+                <div class="breadcrumb"><span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Transactions Inv.</span></div>
                 <div class="flex gap-2">
                     <button onclick="app.openModal('new')" class="btn-primary"><i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Nouveau</span></button>
-                    <button onclick="document.getElementById('fileInput').click()" class="btn-secondary text-emerald-600 border-emerald-200 hover:bg-emerald-50"><i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importer</span></button>
+                    <button onclick="document.getElementById('fileInput').click()" class="btn-secondary text-emerald-600 border-emerald-200"><i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importer</span></button>
                     <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls, .csv" onchange="app.handleImport(event)">
                     <button onclick="app.exportExcel()" class="btn-secondary"><i class="fa-solid fa-download"></i></button>
                 </div>
             </div>
-
             <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left text-gray-600" id="transactionsTable">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b">
-                            <tr>
-                                <th class="px-4 py-3">Date</th>
-                                <th class="px-4 py-3">Opération</th>
-                                <th class="px-4 py-3">Nom Actif</th>
-                                <th class="px-4 py-3">Compte</th>
-                                <th class="px-4 py-3 text-right">Qté</th>
-                                <th class="px-4 py-3 text-right">Prix U.</th>
-                                <th class="px-4 py-3 text-right">Total</th>
-                                <th class="px-4 py-3 text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100"></tbody>
-                    </table>
-                </div>
-                <div id="emptyState" class="hidden p-8 text-center text-gray-400">
-                    <i class="fa-solid fa-inbox text-4xl mb-2"></i>
-                    <p>Aucune transaction enregistrée.</p>
-                </div>
+                <div class="overflow-x-auto"><table class="w-full text-sm text-left text-gray-600" id="transactionsTable"><thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b"><tr><th class="px-4 py-3">Date</th><th class="px-4 py-3">Op.</th><th class="px-4 py-3">Actif</th><th class="px-4 py-3">Compte</th><th class="px-4 py-3 text-right">Qté</th><th class="px-4 py-3 text-right">Prix</th><th class="px-4 py-3 text-right">Total</th><th class="px-4 py-3 text-center">Actions</th></tr></thead><tbody class="divide-y divide-gray-100"></tbody></table></div>
+                <div id="emptyState" class="hidden p-8 text-center text-gray-400"><i class="fa-solid fa-inbox text-4xl mb-2"></i><p>Aucune transaction.</p></div>
             </div>
         </section>
 
-        <!-- SECTION 5: PROJECTIONS -->
+        <!-- SECTION 5: BUDGET (NOUVEAU) -->
+        <section id="budget-view" class="hidden animate-fade-in">
+            <div class="flex justify-between items-center mb-6">
+                <div class="breadcrumb"><span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Revenus/Dépenses</span></div>
+                <div class="flex gap-2">
+                    <button onclick="app.addBudgetLine()" class="btn-primary bg-emerald-600 hover:bg-emerald-700"><i class="fa-solid fa-plus"></i> Manuel</button>
+                    <button onclick="document.getElementById('scanInput').click()" class="btn-primary"><i class="fa-solid fa-camera"></i> Scanner</button>
+                    <input type="file" id="scanInput" class="hidden" accept="image/*" onchange="app.handleScan(event)">
+                </div>
+            </div>
+
+            <!-- Budget KPIs -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="bg-white p-4 rounded-lg shadow-sm border-l-4 border-emerald-500">
+                    <p class="text-xs text-gray-500 uppercase">Revenus</p>
+                    <p class="text-lg font-bold text-emerald-600" id="budgIncome">0.00 €</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-sm border-l-4 border-red-500">
+                    <p class="text-xs text-gray-500 uppercase">Dépenses</p>
+                    <p class="text-lg font-bold text-red-600" id="budgExpense">0.00 €</p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
+                    <p class="text-xs text-gray-500 uppercase">Solde</p>
+                    <p class="text-lg font-bold text-blue-600" id="budgBalance">0.00 €</p>
+                </div>
+            </div>
+
+            <!-- Scanner Loader -->
+            <div id="scanLoader" class="hidden bg-white p-6 rounded-xl shadow-sm text-center mb-6 border-2 border-dashed border-blue-200">
+                <div class="loader mx-auto mb-3"></div>
+                <p class="text-gray-600 font-medium animate-pulse">Analyse du document en cours...</p>
+                <p class="text-xs text-gray-400 mt-1" id="scanStatus">Initialisation...</p>
+            </div>
+
+            <!-- Budget List -->
+            <div id="budgetList" class="space-y-3">
+                <!-- Items générés par JS -->
+            </div>
+            <div id="budgetEmpty" class="text-center py-10 text-gray-400">
+                <i class="fa-solid fa-receipt text-4xl mb-2 opacity-50"></i>
+                <p>Aucune dépense scannée ou ajoutée.</p>
+            </div>
+        </section>
+
+        <!-- SECTION 6: PROJECTIONS -->
         <section id="projections-view" class="hidden animate-fade-in">
             <div class="flex justify-between items-center mb-6">
-                <div class="breadcrumb">
-                    <span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Projections</span>
-                </div>
+                <div class="breadcrumb"><span onclick="app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Projections</span></div>
                 <button onclick="app.nav('dividends')" class="btn-secondary text-emerald-600 border-emerald-200"><i class="fa-solid fa-coins mr-1"></i> Dividendes</button>
             </div>
-
             <div class="bg-white p-6 rounded-xl shadow-sm mb-8">
                 <div class="flex justify-between items-center mb-4 border-b pb-2">
-                    <div>
-                        <h3 class="text-lg font-bold text-gray-800">Projection Patrimoniale</h3>
-                        <p class="text-xs text-gray-500">Basée sur votre performance historique réelle</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <label class="text-sm text-gray-600">Horizon:</label>
-                        <input type="number" id="projYears" value="20" class="w-16 border rounded text-center" onchange="app.renderProjections()">
-                    </div>
+                    <h3 class="text-lg font-bold text-gray-800">Trajectoire Patrimoniale</h3>
+                    <div class="flex items-center gap-2"><label class="text-sm">Horizon:</label><input type="number" id="projYears" value="20" class="w-16 border rounded text-center" onchange="app.renderProjections()"></div>
                 </div>
-                <div class="chart-container" style="height: 400px;"><canvas id="mainProjectionChart"></canvas></div>
+                <div class="chart-container" style="height: 350px;"><canvas id="mainProjectionChart"></canvas></div>
             </div>
-
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="bg-white p-6 rounded-xl shadow-sm">
-                    <h3 class="chart-title">Investissement Annuel</h3>
-                    <div class="chart-container"><canvas id="yearlyBarChart"></canvas></div>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-sm">
-                    <h3 class="chart-title">Fréquence d'Opérations</h3>
-                    <div class="chart-container"><canvas id="frequencyChart"></canvas></div>
-                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm"><h3 class="chart-title">Flux Investissement</h3><div class="chart-container"><canvas id="yearlyBarChart"></canvas></div></div>
+                <div class="bg-white p-6 rounded-xl shadow-sm"><h3 class="chart-title">Fréquence</h3><div class="chart-container"><canvas id="frequencyChart"></canvas></div></div>
             </div>
         </section>
 
-        <!-- SECTION 6: DIVIDENDES -->
+        <!-- SECTION 7: DIVIDENDES -->
         <section id="dividends-view" class="hidden animate-fade-in">
-            <div class="breadcrumb mb-6">
-                <span onclick="app.nav('projections')">Projections</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Dividendes</span>
-            </div>
+            <div class="breadcrumb mb-6"><span onclick="app.nav('projections')">Projections</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Dividendes</span></div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="dividendCards"></div>
-            <div id="noDividends" class="hidden text-center py-10 text-gray-400">Aucun actif à dividende détecté.</div>
+            <div id="noDividends" class="hidden text-center py-10 text-gray-400">Aucun dividende détecté.</div>
         </section>
 
     </main>
 
-    <!-- Modal Formulaire -->
+    <!-- Modal Transaction -->
     <div id="modalForm" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-[100] flex justify-center items-center backdrop-blur-sm px-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all scale-100 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-6 border-b pb-4">
@@ -243,30 +247,19 @@
                 <input type="hidden" id="editIndex">
                 <div class="grid grid-cols-2 gap-4">
                     <div><label class="form-label">Date</label><input type="date" id="fDate" required class="form-input"></div>
-                    <div>
-                        <label class="form-label">Opération</label>
-                        <select id="fOp" class="form-input">
-                            <option value="Achat">Achat</option><option value="Vente">Vente</option><option value="Dividende">Dividende</option>
-                        </select>
-                    </div>
+                    <div><label class="form-label">Opération</label><select id="fOp" class="form-input"><option value="Achat">Achat</option><option value="Vente">Vente</option><option value="Dividende">Dividende</option></select></div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
-                    <div><label class="form-label">Nom Actif</label><input type="text" id="fName" required class="form-input" placeholder="ex: Total"></div>
-                    <div>
-                        <label class="form-label">Ticker</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="fTicker" class="form-input" placeholder="ex: TTE.PA">
-                            <button type="button" onclick="app.searchTicker()" class="bg-blue-100 text-blue-600 px-3 rounded hover:bg-blue-200"><i class="fa-solid fa-search"></i></button>
-                        </div>
-                    </div>
+                    <div><label class="form-label">Actif</label><input type="text" id="fName" required class="form-input" placeholder="ex: Total"></div>
+                    <div><label class="form-label">Ticker</label><div class="flex gap-2"><input type="text" id="fTicker" class="form-input"><button type="button" onclick="app.searchTicker()" class="bg-blue-100 text-blue-600 px-3 rounded"><i class="fa-solid fa-search"></i></button></div></div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div><label class="form-label">Compte</label><input type="text" id="fAccount" class="form-input"></div>
                     <div><label class="form-label">Secteur</label><input type="text" id="fSector" class="form-input"></div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
-                    <div><label class="form-label">Quantité</label><input type="number" id="fQty" step="0.0001" class="form-input"></div>
-                    <div><label class="form-label">Prix U. (€)</label><input type="number" id="fPrice" step="0.01" class="form-input"></div>
+                    <div><label class="form-label">Qté</label><input type="number" id="fQty" step="0.0001" class="form-input"></div>
+                    <div><label class="form-label">Prix (€)</label><input type="number" id="fPrice" step="0.01" class="form-input"></div>
                 </div>
                 <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition mt-6">Enregistrer</button>
             </form>
@@ -274,12 +267,13 @@
     </div>
 
     <!-- Toast -->
-    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-[200] flex items-center gap-3">
         <i class="fa-solid fa-check-circle text-green-400"></i><span id="toastMsg">Notif</span>
     </div>
 
     <script src="script.js"></script>
 </body>
 </html>
+
 
 
