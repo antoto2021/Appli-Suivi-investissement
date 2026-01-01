@@ -384,7 +384,7 @@ window.app = app;
 // 2. INFO MODULE LOGIC
 // =================================================================
 const infoModule = {
-    config: { username: 'antoto2021', repo: 'Green-Codex' },
+    config: { username: 'antoto2021', repo: 'Suivi-investissement' },
     slides: [
         { icon: "👋", title: "Bienvenue sur InvestTrack V5", desc: "Votre solution ultime pour gérer Patrimoine et Budget." },
         { icon: "📈", title: "Suivi Bourse", desc: "Transactions, Actifs, et Projections basées sur vos performances réelles." },
