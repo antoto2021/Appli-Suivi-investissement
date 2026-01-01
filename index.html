@@ -4,50 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="apple-mobile-web-app-title" content="Suivi Finance">
-    <link rel="apple-touch-icon" href="icon2.png">
-    <link rel="icon" type="image/png" href="icon2.png">
-    <title>Suivi-investissement V5</title>
+    <link rel="apple-touch-icon" href="icon2.png"> 
+    <link rel="icon" type="image/png" href="https://lucide.dev/favicon.ico">
+    <title>InvestTrack V5 - Smart AI</title>
     
-    <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#2563eb">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <link rel="icon" type="image/png" href="https://lucide.dev/favicon.ico">
 
-    <!-- Styles -->
     <link rel="stylesheet" href="style.css">
 
-    <!-- Bibliothèques (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
-    <!-- IDB pour IndexedDB simplifié (optionnel mais pratique, ici je ferai sans ou avec wrapper simple) -->
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen pb-24">
 
-    <!-- Navbar Globale -->
     <nav class="bg-white shadow-md sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
-                <!-- Logo -->
                 <div class="flex items-center cursor-pointer" onclick="window.app.nav('home')">
                     <i class="fa-solid fa-chart-line text-blue-600 text-2xl mr-3"></i>
-                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">InvestTrack <span class="text-xs bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-2 py-0.5 rounded-full ml-2 shadow-sm">V5</span></h1>
+                    <h1 class="text-xl font-bold text-gray-800 tracking-tight">InvestTrack <span class="text-xs bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-2 py-0.5 rounded-full ml-2 shadow-sm">V5 AI</span></h1>
                 </div>
-                
-                <!-- Navigation Droite -->
                 <div class="flex items-center gap-1">
-                    <button onclick="window.app.nav('home')" class="p-2 text-gray-500 hover:text-blue-600 transition rounded-full hover:bg-slate-50" title="Accueil">
-                        <i class="fa-solid fa-house text-xl"></i>
-                    </button>
-                    <!-- Bouton Info (Intégré Navbar) -->
-                    <button onclick="window.infoModule.openModal()" class="p-2 text-gray-500 hover:text-emerald-600 transition rounded-full hover:bg-slate-50 relative" title="Infos & Mises à jour">
+                    <button onclick="window.app.nav('home')" class="p-2 text-gray-500 hover:text-blue-600 transition rounded-full hover:bg-slate-50"><i class="fa-solid fa-house text-xl"></i></button>
+                    <button onclick="window.infoModule.openModal()" class="p-2 text-gray-500 hover:text-emerald-600 transition rounded-full hover:bg-slate-50 relative">
                         <i class="fa-solid fa-circle-info text-xl"></i>
                         <span id="navUpdateDot" class="hidden absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full animate-pulse"></span>
                     </button>
@@ -56,338 +42,132 @@
         </div>
     </nav>
 
-    <!-- Contenu Principal -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-screen relative">
-
-        <!-- SECTION 1: ACCUEIL -->
+        
         <section id="home-view" class="animate-fade-in block">
             <div class="text-center mb-10">
                 <h2 class="text-3xl font-bold text-gray-800">Tableau de bord Unifié</h2>
-                <p class="text-gray-500 mt-2">Suivi-investissement & Budget</p>
+                <p class="text-gray-500 mt-2">Suivi-investissement & Budget Intelligent</p>
             </div>
-
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
                 <div onclick="window.app.nav('dashboard')" class="menu-card group border-l-4 border-blue-500">
-                    <div class="menu-icon-container bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white">
-                        <i class="fa-solid fa-gauge-high text-3xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-800 mb-1">Dashboard Bourse</h3>
-                        <p class="text-gray-500 text-sm">Vue d'ensemble et KPIs.</p>
-                    </div>
+                    <div class="menu-icon-container bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white"><i class="fa-solid fa-gauge-high text-3xl"></i></div>
+                    <div><h3 class="text-xl font-bold text-gray-800 mb-1">Bourse</h3><p class="text-gray-500 text-sm">Vue d'ensemble et KPIs.</p></div>
                 </div>
-
-                <div onclick="window.app.nav('transactions')" class="menu-card group border-l-4 border-indigo-500">
-                    <div class="menu-icon-container bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white">
-                        <i class="fa-solid fa-list-check text-3xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-800 mb-1">Transactions</h3>
-                        <p class="text-gray-500 text-sm">Journal, Import, Ajout.</p>
-                    </div>
-                </div>
-
-                <div onclick="window.app.nav('projections')" class="menu-card group border-l-4 border-purple-500">
-                    <div class="menu-icon-container bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white">
-                        <i class="fa-solid fa-chart-area text-3xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-800 mb-1">Projections</h3>
-                        <p class="text-gray-500 text-sm">Futur estimé.</p>
-                    </div>
-                </div>
-
                 <div onclick="window.app.nav('budget')" class="menu-card group border-l-4 border-emerald-500 ring-2 ring-emerald-50">
-                    <div class="menu-icon-container bg-emerald-600 text-white shadow-lg shadow-emerald-200">
-                        <i class="fa-solid fa-receipt text-3xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-800 mb-1">BudgetScan <span class="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full ml-1">IA</span></h3>
-                        <p class="text-gray-500 text-sm">Scanner de tickets & Suivi dépenses.</p>
-                    </div>
+                    <div class="menu-icon-container bg-emerald-600 text-white shadow-lg shadow-emerald-200"><i class="fa-solid fa-receipt text-3xl"></i></div>
+                    <div><h3 class="text-xl font-bold text-gray-800 mb-1">BudgetScan <span class="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full ml-1">IA</span></h3><p class="text-gray-500 text-sm">Scanner PDF/Images via Gemini.</p></div>
                 </div>
-            </div>
-            
-            <div class="text-center mt-12">
-                <button onclick="window.app.nav('assets')" class="text-slate-400 hover:text-blue-600 text-sm underline">Accéder au Résumé des Actifs & Prix</button>
             </div>
         </section>
 
-        <!-- SECTION 2: DASHBOARD (Invest) -->
         <section id="dashboard-view" class="hidden animate-fade-in">
-            <div class="breadcrumb mb-6">
-                <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Dashboard</span>
-            </div>
+            <div class="breadcrumb mb-6"><span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Bourse</span></div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div class="kpi-card border-l-4 border-blue-500">
-                    <p class="label">Total Investi (PRU)</p>
-                    <p class="value" id="kpiTotal">0,00 €</p>
-                    <div class="icon bg-blue-50 text-blue-600"><i class="fa-solid fa-wallet"></i></div>
+                    <p class="label">Total Investi</p><p class="value" id="kpiTotal">0,00 €</p>
                 </div>
                 <div class="kpi-card border-l-4 border-purple-500">
-                    <p class="label">Valeur Actuelle</p>
-                    <p class="value" id="kpiFuture">0,00 €</p>
-                    <p class="sub-value" id="kpiDiff">PV: 0.00 €</p>
-                    <div class="icon bg-purple-50 text-purple-600"><i class="fa-solid fa-chart-line"></i></div>
-                </div>
-                <div class="kpi-card border-l-4 border-green-500">
-                    <p class="label">Performance</p>
-                    <p class="value" id="kpiReturn">0.00 %</p>
-                    <div class="icon bg-green-50 text-green-600"><i class="fa-solid fa-percent"></i></div>
+                    <p class="label">Valeur Actuelle</p><p class="value" id="kpiFuture">0,00 €</p><p class="sub-value" id="kpiDiff">PV: 0.00 €</p>
                 </div>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="bg-white p-6 rounded-xl shadow-sm">
-                    <h3 class="chart-title">Répartition par Compte</h3>
-                    <div class="chart-container"><canvas id="pieChart"></canvas></div>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-sm flex flex-col justify-center items-center text-center relative overflow-hidden">
-                    <div class="absolute top-0 right-0 w-32 h-32 bg-yellow-50 rounded-bl-full -mr-10 -mt-10"></div>
-                    <div class="p-6 bg-yellow-100 rounded-full mb-4 text-yellow-600 z-10"><i class="fa-regular fa-lightbulb text-4xl"></i></div>
-                    <h3 class="text-xl font-bold text-gray-800 z-10">Conseil du jour</h3>
-                    <p class="text-gray-600 mt-2 max-w-sm italic z-10" id="dailyTip">Chargement...</p>
-                </div>
-            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm"><div class="chart-container"><canvas id="pieChart"></canvas></div></div>
         </section>
 
-        <!-- SECTION 3: RESUME ACTIFS -->
-        <section id="assets-view" class="hidden animate-fade-in">
-            <div class="flex justify-between items-center mb-6">
-                <div class="breadcrumb">
-                    <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Actifs & Prix</span>
-                </div>
-                <div class="bg-blue-50 text-blue-700 px-3 py-1 rounded text-xs border border-blue-200">
-                    <i class="fa-solid fa-info-circle mr-1"></i> Modifiez les prix pour mettre à jour la perf.
-                </div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="assetsGrid"></div>
-        </section>
-
-        <!-- SECTION 4: TRANSACTIONS INVEST -->
-        <section id="transactions-view" class="hidden animate-fade-in">
-            <div class="flex justify-between items-end mb-6">
-                <div class="breadcrumb">
-                    <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Journal Bourse</span>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="window.app.openModal('new')" class="btn-primary"><i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Nouveau</span></button>
-                    <button onclick="document.getElementById('fileInput').click()" class="btn-secondary text-emerald-600 border-emerald-200 hover:bg-emerald-50"><i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importer</span></button>
-                    <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls, .csv" onchange="window.app.handleImport(event)">
-                    <button onclick="window.app.exportExcel()" class="btn-secondary"><i class="fa-solid fa-download"></i></button>
-                </div>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left text-gray-600" id="transactionsTable">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b">
-                            <tr>
-                                <th class="px-4 py-3">Date</th><th class="px-4 py-3">Op.</th><th class="px-4 py-3">Actif</th>
-                                <th class="px-4 py-3">Compte</th><th class="px-4 py-3 text-right">Qté</th>
-                                <th class="px-4 py-3 text-right">Prix U.</th><th class="px-4 py-3 text-right">Total</th>
-                                <th class="px-4 py-3 text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100"></tbody>
-                    </table>
-                </div>
-                <div id="emptyState" class="hidden p-8 text-center text-gray-400"><i class="fa-solid fa-inbox text-4xl mb-2"></i><p>Aucune transaction.</p></div>
-            </div>
-        </section>
-
-        <!-- SECTION 5: PROJECTIONS -->
-        <section id="projections-view" class="hidden animate-fade-in">
-            <div class="flex justify-between items-center mb-6">
-                <div class="breadcrumb">
-                    <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Projections</span>
-                </div>
-                <button onclick="window.app.nav('dividends')" class="btn-secondary text-emerald-600 border-emerald-200"><i class="fa-solid fa-coins mr-1"></i> Dividendes</button>
-            </div>
-            <div class="bg-white p-6 rounded-xl shadow-sm mb-8">
-                <div class="flex justify-between items-center mb-4 border-b pb-2">
-                    <div><h3 class="text-lg font-bold text-gray-800">Projection Patrimoniale</h3><p class="text-xs text-gray-500">Basée sur votre perf. historique</p></div>
-                    <div class="flex items-center gap-2"><label class="text-sm text-gray-600">Horizon:</label><input type="number" id="projYears" value="20" class="w-16 border rounded text-center" onchange="window.app.renderProjections()"></div>
-                </div>
-                <div class="chart-container" style="height: 400px;"><canvas id="mainProjectionChart"></canvas></div>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="bg-white p-6 rounded-xl shadow-sm"><h3 class="chart-title">Cashflow Annuel</h3><div class="chart-container"><canvas id="yearlyBarChart"></canvas></div></div>
-                <div class="bg-white p-6 rounded-xl shadow-sm"><h3 class="chart-title">Fréquence</h3><div class="chart-container"><canvas id="frequencyChart"></canvas></div></div>
-            </div>
-        </section>
-
-        <!-- SECTION 6: DIVIDENDES -->
-        <section id="dividends-view" class="hidden animate-fade-in">
-            <div class="breadcrumb mb-6"><span onclick="window.app.nav('projections')">Projections</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Dividendes</span></div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="dividendCards"></div>
-            <div id="noDividends" class="hidden text-center py-10 text-gray-400">Aucun actif à dividende.</div>
-        </section>
-
-        <!-- SECTION 7: BUDGET SCAN (React) -->
         <section id="budget-view" class="hidden animate-fade-in w-full min-h-[90vh] flex flex-col relative">
-            <!-- Navigation interne Budget -->
             <div class="flex justify-between items-center mb-4">
-                <div class="breadcrumb">
-                    <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">BudgetScan</span>
-                </div>
-                <!-- Bouton "+ bulletin" -->
+                <div class="breadcrumb"><span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">BudgetScan</span></div>
                 <button onclick="window.pdfImporter.open()" class="bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow flex items-center gap-2 transition">
-                    <i class="fa-solid fa-file-invoice"></i> + Bulletin
+                    <i data-lucide="scan-line" class="w-4 h-4"></i> + Scan IA
                 </button>
             </div>
-            
-            <!-- Conteneur React avec hauteur explicite -->
             <div id="budget-root" class="flex-1 w-full bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"></div>
         </section>
 
     </main>
 
-    <!-- BOUTON RAFRAÎCHIR FLOTTANT (BAS DROITE) -->
-    <button id="refreshBtn" onclick="window.infoModule.forceUpdate()" title="Rafraîchir l'application" 
-            class="fixed bottom-6 right-6 bg-emerald-600 hover:bg-emerald-700 text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all z-40 border-4 border-white active:scale-95">
-        <i class="fa-solid fa-rotate-right text-2xl"></i>
-        <!-- Indicateur de MAJ -->
-        <div id="refreshUpdateDot" class="hidden absolute top-0 right-0 w-4 h-4 bg-red-500 border-2 border-white rounded-full animate-ping"></div>
-    </button>
-
-    <!-- MODAL FORMULAIRE INVEST -->
-    <div id="modalForm" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden z-[100] flex justify-center items-center backdrop-blur-sm px-4">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all scale-100 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-6 border-b pb-4">
-                <h3 class="text-xl font-bold text-gray-800" id="modalTitle">Transaction</h3>
-                <button onclick="window.app.closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
-            </div>
-            <form id="txForm" onsubmit="event.preventDefault(); window.app.saveTransaction();" class="space-y-4">
-                <input type="hidden" id="editIndex">
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="form-label">Date</label><input type="date" id="fDate" required class="form-input"></div>
-                    <div><label class="form-label">Opération</label><select id="fOp" class="form-input"><option value="Achat">Achat</option><option value="Vente">Vente</option><option value="Dividende">Dividende</option></select></div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="form-label">Nom Actif</label><input type="text" id="fName" required class="form-input" placeholder="ex: Total"></div>
-                    <div><label class="form-label">Ticker</label><div class="flex gap-2"><input type="text" id="fTicker" class="form-input" placeholder="ex: TTE.PA"><button type="button" onclick="window.app.searchTicker()" class="bg-blue-100 text-blue-600 px-3 rounded hover:bg-blue-200"><i class="fa-solid fa-search"></i></button></div></div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="form-label">Compte</label><input type="text" id="fAccount" class="form-input"></div>
-                    <div><label class="form-label">Secteur</label><input type="text" id="fSector" class="form-input"></div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="form-label">Quantité</label><input type="number" id="fQty" step="0.0001" class="form-input"></div>
-                    <div><label class="form-label">Prix U. (€)</label><input type="number" id="fPrice" step="0.01" class="form-input"></div>
-                </div>
-                <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition mt-6">Enregistrer</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODALE INFO / GITHUB / TUTO -->
-    <div id="info-modal-overlay" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-fade-in border-l-8 border-emerald-600 relative">
-            <button onclick="window.infoModule.closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">✕</button>
-            <div class="p-6 md:p-8 space-y-6">
-                <h2 class="text-2xl font-black text-slate-800">ℹ️ Infos & Updates</h2>
-                
-                <!-- Status GitHub -->
-                <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100 grid grid-cols-2 gap-4">
-                    <div class="border-r border-emerald-200 pr-2">
-                        <h3 class="text-[10px] font-bold text-emerald-700 uppercase">Version Locale (Hash)</h3>
-                        <div class="font-mono text-xs font-bold text-slate-700 mt-1" id="info-local-v">Checking...</div>
-                    </div>
-                    <div class="pl-2 text-right">
-                        <h3 class="text-[10px] font-bold text-emerald-700 uppercase">Dernier Commit (GitHub)</h3>
-                        <div class="font-mono text-xs font-bold text-emerald-600 mt-1" id="info-remote-v">Checking...</div>
-                        <button onclick="window.infoModule.checkGitHub()" class="mt-2 text-[10px] bg-emerald-600 text-white px-2 py-1 rounded hover:bg-emerald-500 shadow-sm">Vérifier</button>
-                    </div>
-                </div>
-                <div id="update-status-msg" class="text-center text-sm font-medium text-slate-500">...</div>
-
-                <!-- Info Stockage IndexedDB -->
-                <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 text-center">
-                    <h3 class="text-xs font-bold text-gray-500 uppercase mb-1">Stockage Local (IndexedDB)</h3>
-                    <div id="storage-info" class="text-sm font-mono text-gray-700">Calcul...</div>
-                </div>
-
-                <div class="border-t pt-4">
-                    <button onclick="window.infoModule.startTuto()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl shadow-md flex justify-center items-center gap-2 transition">
-                        🎓 Lancer le Tutoriel Interactif
-                    </button>
-                </div>
-                <div class="text-center text-[10px] text-slate-400">© 2026 Suivi-investissement</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE SMART PDF IMPORT -->
     <div id="pdf-modal-overlay" class="hidden fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-fade-in relative max-h-[90vh] overflow-y-auto">
             <button onclick="window.pdfImporter.close()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 z-10 bg-white rounded-full p-1">✕</button>
             
-            <div class="p-8">
-                <header class="text-center mb-8">
-                    <h2 class="text-3xl font-bold text-violet-700 mb-2 flex justify-center items-center gap-3">
-                        <i data-lucide="sparkles" class="w-8 h-8"></i> Smart Import
+            <div class="p-6 md:p-8">
+                <header class="text-center mb-6">
+                    <h2 class="text-2xl font-bold text-violet-700 mb-1 flex justify-center items-center gap-2">
+                        <i data-lucide="sparkles" class="w-6 h-6"></i> Smart Extract AI
                     </h2>
-                    <p class="text-slate-500 text-sm">Transformez vos bulletins PDF/IMG en données exploitables via IA.</p>
+                    <p class="text-slate-500 text-xs">PDF & Images (JPG, PNG) vers Budget</p>
                 </header>
 
-                <!-- Etape 1: Clé API -->
-                <div id="pdf-step-1" class="bg-violet-50 rounded-xl p-6 mb-6 border border-violet-100">
-                    <label class="block text-sm font-bold text-violet-800 mb-2">Clé API Google Gemini</label>
+                <div id="ai-step-1" class="bg-violet-50 rounded-xl p-5 mb-4 border border-violet-100">
+                    <label class="block text-xs font-bold text-violet-800 mb-2 uppercase">Clé API Gemini</label>
                     <div class="flex gap-2">
                         <input type="password" id="gemini-key" placeholder="AIzaSy..." class="flex-1 p-2 border border-violet-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-                        <button onclick="window.pdfImporter.verifyKey()" class="bg-violet-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-violet-700 transition">Valider</button>
+                        <button onclick="window.pdfImporter.verifyKey()" id="btn-verify-key" class="bg-violet-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-violet-700 transition">Vérifier</button>
                     </div>
                     <div id="gemini-status" class="mt-2 text-xs"></div>
                 </div>
 
-                <!-- Etape 2: Upload -->
-                <div id="pdf-step-2" class="hidden border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition cursor-pointer" onclick="document.getElementById('pdf-upload').click()">
-                    <input type="file" id="file-upload" class="hidden" accept="application/pdf, image/png, image/jpeg, image/webp" onchange="handleFileSelect(event)">
+                <div id="ai-step-2" class="hidden border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition cursor-pointer" onclick="document.getElementById('ai-upload').click()">
+                    <input type="file" id="ai-upload" class="hidden" accept="application/pdf, image/png, image/jpeg, image/webp" onchange="window.pdfImporter.handleFile(event)">
                     <div class="text-violet-500 mb-2"><i data-lucide="upload-cloud" class="w-10 h-10 mx-auto"></i></div>
-                    <p class="font-medium text-slate-700">Cliquez pour importer un PDF ou une Image</p>
-                    <p class="text-xs text-slate-400 mt-1">Relevés bancaires, factures...</p>
+                    <p class="font-medium text-slate-700 text-sm">Cliquez pour importer</p>
+                    <p class="text-xs text-slate-400 mt-1">PDF, Factures, Tickets (Photos)</p>
                 </div>
 
-                <!-- Logs & Loading -->
-                <div id="pdf-logs" class="hidden mt-4 p-3 bg-slate-900 text-slate-300 rounded-lg text-xs font-mono h-32 overflow-y-auto"></div>
-
-                <!-- Resultat -->
-                <div id="pdf-step-3" class="hidden mt-6">
-                    <h3 class="font-bold text-slate-700 mb-2">Données extraites :</h3>
-                    <div class="overflow-x-auto border rounded-lg max-h-48 mb-4">
-                        <table id="pdf-preview-table" class="min-w-full text-xs text-left"></table>
+                <div id="ai-file-info" class="hidden mt-4 bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <i data-lucide="file-check" class="text-green-500 w-5 h-5 flex-shrink-0"></i>
+                        <div class="overflow-hidden">
+                            <p id="ai-filename" class="font-medium text-slate-700 text-sm truncate">doc.pdf</p>
+                        </div>
                     </div>
-                    <button onclick="window.pdfImporter.importToBudget()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold shadow transition">
-                        Ajouter au Budget
+                    <button onclick="window.pdfImporter.processAuto()" class="bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-2 rounded-lg font-bold shadow-md transition flex items-center gap-2 whitespace-nowrap">
+                        <i data-lucide="zap" class="w-3 h-3"></i> Extraire
                     </button>
+                </div>
+
+                <div id="ai-logs-container" class="hidden mt-4 p-3 bg-slate-900 text-slate-300 rounded-lg text-xs font-mono h-32 overflow-y-auto border border-slate-700">
+                    <div class="flex items-center gap-2 mb-2 border-b border-slate-700 pb-1">
+                        <div class="loader w-3 h-3 border-violet-500 border-t-transparent"></div>
+                        <span class="text-violet-400 font-bold">IA en cours...</span>
+                    </div>
+                    <div id="ai-console"></div>
+                </div>
+
+                <div id="ai-step-3" class="hidden mt-6">
+                    <h3 class="font-bold text-slate-700 mb-2 text-sm flex justify-between items-center">
+                        <span>Aperçu des données</span>
+                        <span id="ai-count" class="text-xs bg-gray-200 px-2 py-1 rounded-full">0 lignes</span>
+                    </h3>
+                    <div class="overflow-x-auto border rounded-lg max-h-40 mb-4 bg-gray-50">
+                        <table id="ai-preview-table" class="min-w-full text-xs text-left"></table>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="window.pdfImporter.importToBudget()" class="col-span-2 bg-violet-600 hover:bg-violet-700 text-white py-3 rounded-lg font-bold shadow transition flex justify-center items-center gap-2">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i> Ajouter au Budget
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- OVERLAY TUTORIEL -->
-    <div id="tuto-overlay" class="hidden fixed inset-0 z-[70] bg-black/80 flex justify-center items-center backdrop-blur-sm transition-opacity">
-        <div class="bg-white w-11/12 max-w-sm rounded-2xl p-6 text-center shadow-2xl transform transition-transform">
-            <span class="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-full uppercase mb-2 inline-block">Guide</span>
-            <h2 id="tuto-title" class="text-xl font-bold text-slate-800 mb-2">Titre</h2>
-            <div class="my-4 text-5xl animate-bounce" id="tuto-icon">👋</div>
-            <p id="tuto-desc" class="text-slate-600 text-sm mb-6">Description</p>
-            <div class="flex justify-center gap-1 mb-6" id="tuto-dots"></div>
-            <button onclick="window.infoModule.nextSlide()" id="tuto-btn" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition">Suivant</button>
+    <div id="info-modal-overlay" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl relative">
+            <button onclick="window.infoModule.closeModal()" class="absolute top-4 right-4 text-slate-400">✕</button>
+            <h2 class="text-xl font-bold mb-4">Infos</h2>
+            <div class="bg-gray-50 p-3 rounded mb-4 text-center">
+                <div class="text-xs text-gray-500 uppercase">Version</div>
+                <div id="info-local-v" class="font-mono font-bold">Checking...</div>
+            </div>
+            <button onclick="window.infoModule.forceUpdate()" class="w-full bg-emerald-600 text-white py-2 rounded-lg font-bold">Forcer la MAJ</button>
         </div>
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-24 right-6 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-[100] flex items-center gap-3">
-        <i class="fa-solid fa-check-circle text-green-400"></i><span id="toastMsg">Notif</span>
-    </div>
-
-    <!-- Scripts -->
     <script type="text/babel" src="script.js"></script>
     <script>
         window.addEventListener('load', () => { if(window.lucide) lucide.createIcons(); });
     </script>
 </body>
 </html>
-
-
 </html>
