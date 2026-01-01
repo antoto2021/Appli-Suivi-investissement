@@ -461,7 +461,7 @@ const infoModule = {
 };
 
 // --- CORRECTION 1 : Rendre app accessible globalement ---
-window.app = app; 
+window.infoModule = infoModule;
 
 
 // =================================================================
