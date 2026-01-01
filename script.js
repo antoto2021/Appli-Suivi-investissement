@@ -88,7 +88,7 @@ const app = {
             if(!assets[tx.name]) assets[tx.name] = { name: tx.name, qty: 0, invested: 0, ticker: tx.ticker||'' };
             if(tx.op === 'Achat') { assets[tx.name].qty += tx.qty; assets[tx.name].invested += (tx.qty*tx.price); }
             else if(tx.op === 'Vente') { 
-                const pru = assets[tx.name].invested / (assets[tx.name].qty + tx.qty); 
+                const pru = assets[tx.name].invested / (assets[tx.name].qty + tx.qty); // Simplifié
                 assets[tx.name].qty -= tx.qty; 
                 assets[tx.name].invested -= (tx.qty*pru);
             }
@@ -118,7 +118,7 @@ const app = {
         const perfEl = document.getElementById('kpiReturn');
         perfEl.textContent = `${perf>=0?'+':''}${perf.toFixed(2)} %`;
         perfEl.className = `value ${perf>=0?'text-green-600':'text-red-500'}`;
-        return { invested, currentVal, perf };
+        return { invested, currentVal, perf }; // Pour les projections
     },
 
     // --- Renderers ---
@@ -144,7 +144,7 @@ const app = {
                     <div class="p-5">
                         <div class="flex justify-between items-center mb-3">
                             <span class="text-gray-500 text-xs font-bold uppercase">Cours Actuel</span>
-                            <input type="number" step="0.01" value="${curr.toFixed(2)}" onchange="app.updatePrice('${a.name}', this.value)" class="price-input">
+                            <input type="number" step="0.01" value="${curr.toFixed(2)}" onchange="window.app.updatePrice('${a.name}', this.value)" class="price-input">
                         </div>
                         <div class="flex justify-between mb-1"><span class="text-gray-500 text-xs">PRU</span><span class="font-mono text-gray-600">${pru.toFixed(2)} €</span></div>
                         <div class="flex justify-between mb-3 border-b border-dashed pb-2"><span class="text-gray-500 text-xs">Quantité</span><span class="font-mono font-semibold">${a.qty.toFixed(2)}</span></div>
@@ -178,8 +178,8 @@ const app = {
                     <td class="px-4 py-3 text-right font-mono text-xs">${tx.price.toFixed(2)}</td>
                     <td class="px-4 py-3 text-right font-bold text-gray-700">${total.toFixed(2)} €</td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="app.openModal('edit', ${idx})" class="text-blue-500 hover:text-blue-700 mx-1"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="app.deleteTx(${idx})" class="text-red-400 hover:text-red-600 mx-1"><i class="fa-solid fa-trash"></i></button>
+                        <button onclick="window.app.openModal('edit', ${idx})" class="text-blue-500 hover:text-blue-700 mx-1"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="window.app.deleteTx(${idx})" class="text-red-400 hover:text-red-600 mx-1"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 </tr>`;
         });
@@ -272,7 +272,7 @@ const app = {
                 const border = this.strColor(a.name, 60, 50);
                 container.innerHTML += `
                     <div class="bg-white rounded-xl shadow-sm border p-4" style="background:${col}; border-color:${border}">
-                        <div class="flex justify-between font-bold" style="color:${border}"><span>${a.name}</span><i class="fa-solid fa-coins"></i></div>
+                        <div class="flex justify-between font-bold" style="color:${border}"><span>${a.name}</span><i class="fa-solid fa-coins text-yellow-600"></i></div>
                         <div class="mt-4 flex justify-between items-end">
                             <div><p class="text-xs text-gray-500">Revenu Est.</p><p class="text-xl font-bold text-emerald-700">${total.toFixed(2)} €</p></div>
                             <div class="text-right"><p class="text-xs text-gray-500">Unit.</p><p class="font-mono">${info.current} €</p></div>
@@ -376,15 +376,14 @@ const app = {
     toast: function(m) { const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=m; t.classList.remove('translate-y-20','opacity-0'); setTimeout(()=>t.classList.add('translate-y-20','opacity-0'),2500); }
 };
 
-// --- CORRECTION 1 : Rendre app accessible globalement ---
-window.app = app; 
-
-
 // =================================================================
-// 2. INFO MODULE LOGIC
+// 2. INFO MODULE LOGIC (GITHUB API + UPDATE)
 // =================================================================
 const infoModule = {
+    // Config GitHub
     config: { username: 'antoto2021', repo: 'Suivi-investissement' },
+    
+    // Tuto Data
     slides: [
         { icon: "👋", title: "Bienvenue sur InvestTrack V5", desc: "Votre solution ultime pour gérer Patrimoine et Budget." },
         { icon: "📈", title: "Suivi Bourse", desc: "Transactions, Actifs, et Projections basées sur vos performances réelles." },
@@ -395,6 +394,7 @@ const infoModule = {
 
     init: function() {
         this.renderLocalInfo();
+        // Auto-check updates on load after 3s
         setTimeout(() => this.checkGitHub(true), 3000);
     },
 
@@ -402,34 +402,78 @@ const infoModule = {
     closeModal: function() { document.getElementById('info-modal-overlay').classList.add('hidden'); },
 
     renderLocalInfo: function() {
-        const h = localStorage.getItem('app_version_hash') || 'Init';
+        // Affiche le hash local stocké
+        const h = localStorage.getItem('app_version_hash') || 'Aucun (Init)';
         document.getElementById('info-local-v').innerText = h.substring(0,7);
     },
 
     checkGitHub: function(bg=false) {
-        const btn = document.querySelector('#info-remote-v');
-        if(!bg) btn.innerText = '...';
-        fetch(`https://api.github.com/repos/${this.config.username}/${this.config.repo}/commits?per_page=1`)
-            .then(r => r.json())
+        const remoteLabel = document.getElementById('info-remote-v');
+        const statusMsg = document.getElementById('update-status-msg');
+        
+        if(!bg) remoteLabel.innerText = 'Vérification...';
+        
+        // Appel API GitHub pour le dernier commit SHA
+        const url = `https://api.github.com/repos/${this.config.username}/${this.config.repo}/commits?per_page=1`;
+        
+        return fetch(url)
+            .then(r => {
+                if(!r.ok) throw new Error("Repo introuvable");
+                return r.json();
+            })
             .then(d => {
-                if(d[0]) {
-                    const sha = d[0].sha;
-                    document.getElementById('info-remote-v').innerText = sha.substring(0,7);
-                    const local = localStorage.getItem('app_version_hash');
-                    if(local && local !== sha) {
-                        document.getElementById('navUpdateDot').classList.remove('hidden');
+                if(d && d[0]) {
+                    const remoteSha = d[0].sha;
+                    const localSha = localStorage.getItem('app_version_hash');
+                    
+                    // Mise à jour de l'affichage
+                    if(document.getElementById('info-remote-v')) {
+                        document.getElementById('info-remote-v').innerText = remoteSha.substring(0,7);
                     }
-                    if(!local) localStorage.setItem('app_version_hash', sha);
+
+                    // Logique de comparaison
+                    if(!localSha) {
+                        // Premier lancement
+                        localStorage.setItem('app_version_hash', remoteSha);
+                        if(statusMsg) statusMsg.innerText = "Première initialisation.";
+                    } else if(localSha !== remoteSha) {
+                        // Mise à jour disponible !
+                        if(statusMsg) {
+                            statusMsg.innerText = "⚠️ Mise à jour disponible !";
+                            statusMsg.className = "text-center text-sm font-bold text-amber-600 animate-pulse";
+                        }
+                        // Activer les points rouges
+                        document.getElementById('navUpdateDot').classList.remove('hidden');
+                        document.getElementById('refreshUpdateDot').classList.remove('hidden');
+                    } else {
+                        if(statusMsg) statusMsg.innerText = "✅ Application à jour.";
+                    }
+                    return remoteSha;
                 }
             })
-            .catch(e => { if(!bg) btn.innerText = 'Err'; });
+            .catch(e => {
+                console.error(e);
+                if(!bg && remoteLabel) remoteLabel.innerText = "Erreur";
+                if(statusMsg) statusMsg.innerText = "Erreur de connexion GitHub";
+            });
     },
 
     forceUpdate: function() {
         const btn = document.getElementById('refreshBtn');
-        btn.classList.add('animate-spin');
-        this.checkGitHub().then(() => {
-            setTimeout(() => window.location.reload(), 1000);
+        // Animation de rotation unique
+        btn.classList.add('spin-once');
+        setTimeout(() => btn.classList.remove('spin-once'), 1000);
+
+        this.checkGitHub().then((newSha) => {
+            if(newSha) {
+                // On met à jour le hash local
+                localStorage.setItem('app_version_hash', newSha);
+                // On recharge la page pour prendre en compte les modifs
+                setTimeout(() => window.location.reload(), 800);
+            } else {
+                // Juste un reload simple si pas de newSha (erreur ou autre)
+                setTimeout(() => window.location.reload(), 800);
+            }
         });
     },
 
@@ -459,10 +503,6 @@ const infoModule = {
         }
     }
 };
-
-// --- CORRECTION 1 : Rendre app accessible globalement ---
-window.infoModule = infoModule;
-
 
 // =================================================================
 // 3. BUDGET SCAN APP (React)
@@ -532,6 +572,7 @@ const BudgetApp = () => {
                 <h2 className="font-bold flex items-center gap-2"><i data-lucide="scan-line"></i> BudgetScan</h2>
                 {step==='results' && <button onClick={()=>setStep('upload')} className="text-xs bg-emerald-800 px-2 py-1 rounded">Nouveau</button>}
             </div>
+            
             <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
                 {step === 'upload' && (
                     <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
@@ -542,12 +583,14 @@ const BudgetApp = () => {
                         {transactions.length > 0 && <button onClick={()=>setStep('results')} className="text-gray-400 text-sm underline">Retour à la liste</button>}
                     </div>
                 )}
+
                 {step === 'processing' && (
                     <div className="flex flex-col items-center justify-center h-full">
                         <div className="loader mb-4"></div>
                         <p className="text-gray-500 text-sm animate-pulse">{status}</p>
                     </div>
                 )}
+
                 {step === 'results' && (
                     <div className="space-y-4">
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-emerald-100 text-center">
@@ -591,8 +634,17 @@ const BudgetApp = () => {
 // 4. MAIN INIT
 // =================================================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Exporter les objets globaux pour les onclick HTML
+    window.app = app;
+    window.infoModule = infoModule;
+
+    // Init Vanilla Apps
     app.init();
     infoModule.init();
+    
+    // Init React App
     const root = ReactDOM.createRoot(document.getElementById('budget-root'));
     root.render(<BudgetApp />);
 });
+
+
