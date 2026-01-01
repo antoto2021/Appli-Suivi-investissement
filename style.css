@@ -62,5 +62,3 @@ body { overscroll-behavior-y: none; }
 }
 .price-input:focus { background: white; outline: 2px solid #3b82f6; border-color: transparent; }
 .chart-title { font-size: 0.85rem; font-weight: 700; color: #334155; margin-bottom: 0.5rem; }
-
-
