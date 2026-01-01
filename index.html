@@ -27,6 +27,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <!-- IDB pour IndexedDB simplifié (optionnel mais pratique, ici je ferai sans ou avec wrapper simple) -->
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen pb-24">
 
@@ -102,7 +103,7 @@
                     </div>
                     <div>
                         <h3 class="text-xl font-bold text-gray-800 mb-1">BudgetScan <span class="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full ml-1">IA</span></h3>
-                        <p class="text-gray-500 text-sm">Scanner de tickets.</p>
+                        <p class="text-gray-500 text-sm">Scanner de tickets & Suivi dépenses.</p>
                     </div>
                 </div>
             </div>
@@ -222,12 +223,20 @@
         </section>
 
         <!-- SECTION 7: BUDGET SCAN (React) -->
-        <section id="budget-view" class="hidden animate-fade-in w-full h-[85vh] flex flex-col relative">
-            <div class="breadcrumb mb-4 absolute top-0 left-0 z-10 p-2 bg-white/80 rounded-br-lg backdrop-blur-sm">
-                <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">BudgetScan</span>
+        <section id="budget-view" class="hidden animate-fade-in w-full min-h-[90vh] flex flex-col relative">
+            <!-- Navigation interne Budget -->
+            <div class="flex justify-between items-center mb-4">
+                <div class="breadcrumb">
+                    <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">BudgetScan</span>
+                </div>
+                <!-- Bouton "+ bulletin" -->
+                <button onclick="window.pdfImporter.open()" class="bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow flex items-center gap-2 transition">
+                    <i class="fa-solid fa-file-invoice"></i> + Bulletin
+                </button>
             </div>
+            
             <!-- Conteneur React avec hauteur explicite -->
-            <div id="budget-root" class="flex-1 h-full w-full"></div>
+            <div id="budget-root" class="flex-1 w-full bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"></div>
         </section>
 
     </main>
@@ -291,12 +300,66 @@
                 </div>
                 <div id="update-status-msg" class="text-center text-sm font-medium text-slate-500">...</div>
 
+                <!-- Info Stockage IndexedDB -->
+                <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 text-center">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase mb-1">Stockage Local (IndexedDB)</h3>
+                    <div id="storage-info" class="text-sm font-mono text-gray-700">Calcul...</div>
+                </div>
+
                 <div class="border-t pt-4">
                     <button onclick="window.infoModule.startTuto()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-xl shadow-md flex justify-center items-center gap-2 transition">
                         🎓 Lancer le Tutoriel Interactif
                     </button>
                 </div>
                 <div class="text-center text-[10px] text-slate-400">© 2026 Suivi-investissement</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE SMART PDF IMPORT -->
+    <div id="pdf-modal-overlay" class="hidden fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-fade-in relative max-h-[90vh] overflow-y-auto">
+            <button onclick="window.pdfImporter.close()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 z-10 bg-white rounded-full p-1">✕</button>
+            
+            <div class="p-8">
+                <header class="text-center mb-8">
+                    <h2 class="text-3xl font-bold text-violet-700 mb-2 flex justify-center items-center gap-3">
+                        <i data-lucide="sparkles" class="w-8 h-8"></i> Smart Import
+                    </h2>
+                    <p class="text-slate-500 text-sm">Transformez vos bulletins PDF/IMG en données exploitables via IA.</p>
+                </header>
+
+                <!-- Etape 1: Clé API -->
+                <div id="pdf-step-1" class="bg-violet-50 rounded-xl p-6 mb-6 border border-violet-100">
+                    <label class="block text-sm font-bold text-violet-800 mb-2">Clé API Google Gemini</label>
+                    <div class="flex gap-2">
+                        <input type="password" id="gemini-key" placeholder="AIzaSy..." class="flex-1 p-2 border border-violet-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                        <button onclick="window.pdfImporter.verifyKey()" class="bg-violet-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-violet-700 transition">Valider</button>
+                    </div>
+                    <div id="gemini-status" class="mt-2 text-xs"></div>
+                </div>
+
+                <!-- Etape 2: Upload -->
+                <div id="pdf-step-2" class="hidden border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition cursor-pointer" onclick="document.getElementById('pdf-upload').click()">
+                    <input type="file" id="pdf-upload" class="hidden" accept="application/pdf, image/*" onchange="window.pdfImporter.handleFile(event)">
+                    <div class="text-violet-500 mb-2"><i data-lucide="upload-cloud" class="w-10 h-10 mx-auto"></i></div>
+                    <p class="font-medium text-slate-700">Cliquez pour importer un PDF ou une Image</p>
+                    <p class="text-xs text-slate-400 mt-1">Relevés bancaires, factures...</p>
+                </div>
+
+                <!-- Logs & Loading -->
+                <div id="pdf-logs" class="hidden mt-4 p-3 bg-slate-900 text-slate-300 rounded-lg text-xs font-mono h-32 overflow-y-auto"></div>
+
+                <!-- Resultat -->
+                <div id="pdf-step-3" class="hidden mt-6">
+                    <h3 class="font-bold text-slate-700 mb-2">Données extraites :</h3>
+                    <div class="overflow-x-auto border rounded-lg max-h-48 mb-4">
+                        <table id="pdf-preview-table" class="min-w-full text-xs text-left"></table>
+                    </div>
+                    <button onclick="window.pdfImporter.importToBudget()" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold shadow transition">
+                        Ajouter au Budget
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -324,4 +387,7 @@
         window.addEventListener('load', () => { if(window.lucide) lucide.createIcons(); });
     </script>
 </body>
+</html>
+
+
 </html>
