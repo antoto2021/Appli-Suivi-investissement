@@ -341,7 +341,7 @@
 
                 <!-- Etape 2: Upload -->
                 <div id="pdf-step-2" class="hidden border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition cursor-pointer" onclick="document.getElementById('pdf-upload').click()">
-                    <input type="file" id="pdf-upload" class="hidden" accept="application/pdf, image/*" onchange="window.pdfImporter.handleFile(event)">
+                    <input type="file" id="file-upload" class="hidden" accept="application/pdf, image/png, image/jpeg, image/webp" onchange="handleFileSelect(event)">
                     <div class="text-violet-500 mb-2"><i data-lucide="upload-cloud" class="w-10 h-10 mx-auto"></i></div>
                     <p class="font-medium text-slate-700">Cliquez pour importer un PDF ou une Image</p>
                     <p class="text-xs text-slate-400 mt-1">Relevés bancaires, factures...</p>
