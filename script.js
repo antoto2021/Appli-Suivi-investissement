@@ -376,6 +376,10 @@ const app = {
     toast: function(m) { const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=m; t.classList.remove('translate-y-20','opacity-0'); setTimeout(()=>t.classList.add('translate-y-20','opacity-0'),2500); }
 };
 
+// --- CORRECTION 1 : Rendre app accessible globalement ---
+window.app = app; 
+
+
 // =================================================================
 // 2. INFO MODULE LOGIC
 // =================================================================
@@ -455,6 +459,10 @@ const infoModule = {
         }
     }
 };
+
+// --- CORRECTION 1 : Rendre app accessible globalement ---
+window.app = app; 
+
 
 // =================================================================
 // 3. BUDGET SCAN APP (React)
