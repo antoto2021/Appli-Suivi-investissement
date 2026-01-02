@@ -428,7 +428,7 @@ const app = {
 };
 
 // =================================================================
-// 2. BUDGET SCAN APP (REACT + CHARTS) - CORRIGÉ & AMÉLIORÉ
+// 2. BUDGET SCAN APP (CORRIGÉE & SÉCURISÉE)
 // =================================================================
 const CATEGORIES = {
     'Alimentation': ['carrefour', 'leclerc', 'auchan', 'lidl', 'courses'],
@@ -442,9 +442,7 @@ const CATEGORIES = {
 const BudgetApp = () => {
     const [transactions, setTransactions] = useState([]);
     const [view, setView] = useState('dashboard'); 
-    
-    // NOUVEAU : State pour le filtre d'année (par défaut l'année actuelle)
-    const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
+    const [filterYear, setFilterYear] = useState('Tout'); // Par défaut 'Tout' pour être sûr de voir les données
     
     const barRef = useRef(null);
     const pieRef = useRef(null);
@@ -452,22 +450,32 @@ const BudgetApp = () => {
     // Chargement des données
     useEffect(() => {
         const load = async () => {
-            await dbService.init();
-            const data = await dbService.getAll('budget');
-            // Tri par date décroissante
-            setTransactions(data.sort((a,b) => new Date(b.date) - new Date(a.date)));
+            try {
+                await dbService.init();
+                const data = await dbService.getAll('budget');
+                // Sécurisation des données brutes pour éviter le crash
+                const safeData = (data || []).map(t => ({
+                    ...t,
+                    date: t.date || new Date().toISOString().split('T')[0], // Fallback date
+                    amount: parseFloat(t.amount) || 0,
+                    description: t.description || 'Inconnu',
+                    category: t.category || 'Autre'
+                }));
+                setTransactions(safeData.sort((a,b) => new Date(b.date) - new Date(a.date)));
+            } catch (e) {
+                console.error("Erreur chargement budget:", e);
+            }
         };
         load();
         window.addEventListener('budget-update', load);
         return () => window.removeEventListener('budget-update', load);
     }, []);
 
-    // Calculs pour le Dashboard (reste inchangé pour la vue Dashboard)
+    // Calculs Dashboard
     const getStats = () => {
         const now = new Date();
         const currentM = now.getMonth(), currentY = now.getFullYear();
         
-        // Transaction du mois pour les KPI immédiats
         const currentTx = transactions.filter(t => { 
             const d = new Date(t.date); 
             return d.getMonth()===currentM && d.getFullYear()===currentY; 
@@ -492,61 +500,49 @@ const BudgetApp = () => {
         return { currentTx, top5, cats, sixM };
     };
 
-    // Gestion des Graphiques (Chart.js)
+    // Gestion Graphiques
     useEffect(() => {
         if(view !== 'dashboard') return;
         const { cats, sixM } = getStats();
-        
-        // Petit délai pour s'assurer que le canvas est rendu
         const timer = setTimeout(() => {
             if(pieRef.current) {
                 if(window.bPie) window.bPie.destroy();
                 const ctx = pieRef.current.getContext('2d');
-                window.bPie = new Chart(ctx, { 
-                    type: 'doughnut', 
-                    data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#ec4899','#10b981'] }] }, 
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } } 
-                });
+                window.bPie = new Chart(ctx, { type: 'doughnut', data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#ec4899','#10b981'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } } });
             }
             if(barRef.current) {
                 if(window.bBar) window.bBar.destroy();
                 const ctx = barRef.current.getContext('2d');
-                window.bBar = new Chart(ctx, { 
-                    type: 'bar', 
-                    data: { labels: Object.keys(sixM), datasets: [{ label: 'Dépenses', data: Object.values(sixM), backgroundColor: '#10b981', borderRadius: 4 }] }, 
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } 
-                });
+                window.bBar = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(sixM), datasets: [{ label: 'Dépenses', data: Object.values(sixM), backgroundColor: '#10b981', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
             }
         }, 100);
         return () => clearTimeout(timer);
     }, [transactions, view]);
 
-    // Actions DB
-    const addManual = async () => { await dbService.add({ id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Nouvelle dépense", amount: -10, category: "Autre" }); window.dispatchEvent(new Event('budget-update')); };
+    // Actions
+    const addManual = async () => { await dbService.add({ id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Dépense manuelle", amount: -10, category: "Autre" }); window.dispatchEvent(new Event('budget-update')); };
     const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add({...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
-    const deleteTx = async (id) => { if(confirm("Supprimer la ligne ?")) { await dbService.delete(id); window.dispatchEvent(new Event('budget-update')); } };
+    const deleteTx = async (id) => { if(confirm("Supprimer ?")) { await dbService.delete(id); window.dispatchEvent(new Event('budget-update')); } };
     
-    // --- LOGIQUE DE FILTRE POUR L'HISTORIQUE ---
-    
-    // 1. Récupérer les années disponibles dans les données
+    // --- LOGIQUE SÉCURISÉE ---
     const availableYears = React.useMemo(() => {
-        const years = new Set(transactions.map(t => t.date.split('-')[0]));
-        return ['Tout', ...Array.from(years).sort().reverse()];
+        try {
+            const years = new Set(transactions.map(t => (t.date ? String(t.date).substring(0,4) : '2024')));
+            return ['Tout', ...Array.from(years).sort().reverse()];
+        } catch(e) { return ['Tout']; }
     }, [transactions]);
 
-    // 2. Filtrer la liste en fonction du bouton cliqué
     const filteredList = transactions.filter(t => {
         if (filterYear === 'Tout') return true;
-        return t.date.startsWith(filterYear);
+        return t.date && String(t.date).startsWith(filterYear);
     });
 
-    // Données pour le dashboard uniquement
     const { top5 } = getStats();
 
     return (
-        <div className="flex flex-col h-full bg-slate-50">
-            {/* Header Navigation */}
-            <div className="flex justify-between items-center p-4 bg-white shadow-sm mb-4 sticky top-0 z-10">
+        <div className="flex flex-col h-full bg-slate-50 relative">
+            {/* Header Fixe */}
+            <div className="flex justify-between items-center p-4 bg-white shadow-sm mb-2 sticky top-0 z-20">
                 <div className="flex gap-2">
                     <button onClick={()=>setView('dashboard')} className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${view==='dashboard'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>Dashboard</button>
                     <button onClick={()=>setView('list')} className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${view==='list'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>Historique</button>
@@ -554,101 +550,65 @@ const BudgetApp = () => {
                 <button onClick={addManual} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">+ Manuel</button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 pb-20">
+            {/* Zone de contenu avec hauteur forcée pour éviter le collapse CSS */}
+            <div className="flex-1 overflow-y-auto px-4 pb-24" style={{ height: 'calc(100vh - 180px)' }}>
                 
-                {/* VUE DASHBOARD */}
                 {view === 'dashboard' && (
-                    <div className="space-y-6 animate-fade-in">
+                    <div className="space-y-6 animate-fade-in pb-10">
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                             <h3 className="text-sm font-bold text-gray-700 mb-2">Dépenses (6 mois)</h3>
                             <div className="h-48 relative"><canvas ref={barRef}></canvas></div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                                <h3 className="text-sm font-bold text-gray-700 mb-2">Répartition (Ce mois)</h3>
-                                <div className="h-40 relative"><canvas ref={pieRef}></canvas></div>
-                            </div>
-                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                                 <h3 className="text-sm font-bold text-gray-700 mb-2">Top Dépenses (Ce mois)</h3>
                                 <div className="space-y-2">
-                                    {top5.length > 0 ? top5.map(([n,a], i) => (
-                                        <div key={i} className="flex justify-between text-xs items-center border-b border-gray-50 last:border-0 pb-1 last:pb-0">
-                                            <span className="truncate flex-1 font-medium text-gray-600">{i+1}. {n}</span>
-                                            <span className="font-bold text-gray-800">{a.toFixed(2)}€</span>
-                                        </div>
-                                    )) : <p className="text-xs text-gray-400 italic">Aucune donnée ce mois-ci.</p>}
+                                    {top5.map(([n,a], i) => (<div key={i} className="flex justify-between text-xs items-center border-b border-gray-50 last:border-0 pb-1"><span className="truncate flex-1 font-medium text-gray-600">{i+1}. {n}</span><span className="font-bold text-gray-800">{a.toFixed(2)}€</span></div>))}
+                                    {top5.length===0 && <p className="text-xs text-gray-400">Rien ce mois-ci.</p>}
                                 </div>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                <h3 className="text-sm font-bold text-gray-700 mb-2">Répartition</h3>
+                                <div className="h-40 relative"><canvas ref={pieRef}></canvas></div>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* VUE HISTORIQUE AVEC FILTRES */}
                 {view === 'list' && (
-                    <div className="space-y-4 animate-fade-in">
-                        
-                        {/* Barre de filtres Années */}
+                    <div className="space-y-4 animate-fade-in pb-10">
                         <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-                            <span className="text-xs font-bold text-gray-400 uppercase mr-1">Filtrer:</span>
                             {availableYears.map(y => (
-                                <button 
-                                    key={y} 
-                                    onClick={() => setFilterYear(y)}
-                                    className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterYear === y ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
-                                >
-                                    {y}
-                                </button>
+                                <button key={y} onClick={() => setFilterYear(y)} className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterYear === y ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200'}`}>{y}</button>
                             ))}
                         </div>
 
-                        {/* Liste filtrée */}
                         <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase">
-                                {filterYear === 'Tout' ? 'Tout l\'historique' : `Année ${filterYear}`} ({filteredList.length})
+                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between">
+                                <span>{filterYear === 'Tout' ? 'Tout' : filterYear}</span>
+                                <span>{filteredList.length} lignes</span>
                             </h3>
                             
                             {filteredList.length === 0 ? (
-                                <div className="text-center py-10 text-gray-400 bg-white rounded-xl border border-dashed border-gray-200">
-                                    <i className="fa-solid fa-filter-circle-xmark text-3xl mb-2 opacity-50"></i>
-                                    <p className="text-sm">Aucune transaction trouvée.</p>
+                                <div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200">
+                                    <p className="text-sm text-gray-400">Aucune donnée.</p>
+                                    <button onClick={addManual} className="mt-2 text-emerald-600 text-xs font-bold underline">Créer une transaction</button>
                                 </div>
                             ) : (
                                 filteredList.map(t => (
-                                    <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2 hover:shadow-md transition group">
-                                        <div className="flex justify-between items-center">
-                                            <input 
-                                                type="text" 
-                                                value={t.description} 
-                                                onChange={(e)=>updateTx(t.id,'description',e.target.value)} 
-                                                className="font-bold text-gray-700 bg-transparent w-full focus:outline-none focus:text-blue-600 text-sm" 
-                                            />
-                                            <input 
-                                                type="number" 
-                                                step="0.01" 
-                                                value={t.amount} 
-                                                onChange={(e)=>updateTx(t.id,'amount',parseFloat(e.target.value))} 
-                                                className={`text-right w-24 font-mono font-bold bg-transparent focus:outline-none focus:bg-gray-50 rounded px-1 ${t.amount<0?'text-slate-700':'text-emerald-600'}`} 
-                                            />
+                                    <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2">
+                                        <div className="flex justify-between items-center gap-2">
+                                            <input type="text" value={t.description} onChange={(e)=>updateTx(t.id,'description',e.target.value)} className="font-bold text-gray-700 bg-transparent w-full focus:outline-none text-sm" />
+                                            <input type="number" step="0.01" value={t.amount} onChange={(e)=>updateTx(t.id,'amount',parseFloat(e.target.value))} className={`text-right w-24 font-mono font-bold bg-transparent focus:outline-none rounded ${t.amount<0?'text-slate-700':'text-emerald-600'}`} />
                                         </div>
-                                        <div className="flex justify-between items-center">
+                                        <div className="flex justify-between items-center text-xs">
                                             <div className="flex gap-2 items-center flex-wrap">
-                                                <input 
-                                                    type="date" 
-                                                    value={t.date} 
-                                                    onChange={(e)=>updateTx(t.id,'date',e.target.value)} 
-                                                    className="text-[10px] text-gray-400 bg-transparent border border-transparent hover:border-gray-200 rounded" 
-                                                />
-                                                <select 
-                                                    value={t.category} 
-                                                    onChange={(e)=>updateTx(t.id,'category',e.target.value)} 
-                                                    className="text-[10px] px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 focus:border-blue-300 outline-none"
-                                                >
+                                                <input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-gray-400 bg-transparent border-none p-0" />
+                                                <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 outline-none">
                                                     {Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}
                                                 </select>
                                             </div>
-                                            <button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500 px-2 transition opacity-0 group-hover:opacity-100">
-                                                <i className="fa-solid fa-trash text-sm"></i>
-                                            </button>
+                                            <button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500 px-2"><i className="fa-solid fa-trash"></i></button>
                                         </div>
                                     </div>
                                 ))
