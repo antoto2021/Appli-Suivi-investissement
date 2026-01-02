@@ -428,23 +428,25 @@ const app = {
 };
 
 // =================================================================
-// 2. BUDGET SCAN APP (REACT + CHARTS)
+// 2. BUDGET SCAN APP (REACT + CHARTS) - AVEC FILTRE ANNÉES
 // =================================================================
 const CATEGORIES = {
-    'Alimentation': ['carrefour', 'leclerc', 'auchan', 'lidl', 'courses'],
-    'Restauration': ['mcdo', 'uber', 'deliveroo', 'restaurant', 'cafe'],
-    'Transport': ['sncf', 'total', 'essence', 'peage', 'uber', 'parking'],
-    'Logement': ['loyer', 'edf', 'eau', 'internet'],
-    'Loisirs': ['netflix', 'cinema', 'sport'],
-    'Salaire': ['salaire', 'virement', 'cpam']
+    'Alimentation': ['carrefour', 'leclerc', 'auchan', 'lidl', 'courses', 'burger king', 'mcdonalds', 'tacos', 'bouillon', 'super u'],
+    'Restauration': ['mcdo', 'uber', 'deliveroo', 'restaurant', 'cafe', 'starbucks'],
+    'Transport': ['sncf', 'total', 'essence', 'peage', 'uber', 'parking', 'ratp', 'navigo'],
+    'Logement': ['loyer', 'edf', 'eau', 'internet', 'bouygues', 'free', 'sfr'],
+    'Loisirs': ['netflix', 'cinema', 'sport', 'spotify', 'apple', 'google'],
+    'Salaire': ['salaire', 'virement', 'cpam', 'caf']
 };
 
 const BudgetApp = () => {
     const [transactions, setTransactions] = useState([]);
-    const [view, setView] = useState('dashboard'); 
+    const [view, setView] = useState('dashboard');
+    const [filterYear, setFilterYear] = useState('Tout'); // Nouvel état pour le filtre
     const barRef = useRef(null);
     const pieRef = useRef(null);
 
+    // Chargement initial
     useEffect(() => {
         const load = async () => {
             await dbService.init();
@@ -456,10 +458,16 @@ const BudgetApp = () => {
         return () => window.removeEventListener('budget-update', load);
     }, []);
 
+    // --- Helpers Stats ---
     const getStats = () => {
         const now = new Date();
         const currentM = now.getMonth(), currentY = now.getFullYear();
-        const currentTx = transactions.filter(t => { const d = new Date(t.date); return d.getMonth()===currentM && d.getFullYear()===currentY; });
+        
+        // Filtre dashboard (Mois en cours)
+        const currentTx = transactions.filter(t => { 
+            const d = new Date(t.date); 
+            return d.getMonth()===currentM && d.getFullYear()===currentY; 
+        });
 
         const merchants = {};
         currentTx.forEach(t => { if(t.amount < 0) merchants[t.description] = (merchants[t.description]||0) + Math.abs(t.amount); });
@@ -469,11 +477,30 @@ const BudgetApp = () => {
         currentTx.forEach(t => { if(t.amount < 0) cats[t.category] = (cats[t.category]||0) + Math.abs(t.amount); });
 
         const sixM = {};
-        for(let i=5; i>=0; i--) { const d = new Date(now.getFullYear(), now.getMonth()-i, 1); sixM[`${d.getMonth()+1}/${d.getFullYear()}`] = 0; }
-        transactions.forEach(t => { if(t.amount < 0) { const d = new Date(t.date); const k = `${d.getMonth()+1}/${d.getFullYear()}`; if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount); } });
+        for(let i=5; i>=0; i--) { 
+            const d = new Date(now.getFullYear(), now.getMonth()-i, 1); 
+            sixM[`${d.getMonth()+1}/${d.getFullYear()}`] = 0; 
+        }
+        transactions.forEach(t => { 
+            if(t.amount < 0) { 
+                const d = new Date(t.date); 
+                const k = `${d.getMonth()+1}/${d.getFullYear()}`; 
+                if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount); 
+            } 
+        });
         return { currentTx, top5, cats, sixM };
     };
 
+    // --- Helpers Filtres ---
+    // Récupère la liste unique des années présentes dans les transactions
+    const availableYears = Array.from(new Set(transactions.map(t => t.date.split('-')[0]))).sort().reverse();
+    
+    // Filtre la liste affichée selon l'année choisie
+    const displayedTransactions = filterYear === 'Tout' 
+        ? transactions 
+        : transactions.filter(t => t.date.startsWith(filterYear));
+
+    // --- Graphiques ---
     useEffect(() => {
         if(view !== 'dashboard') return;
         const { cats, sixM } = getStats();
@@ -494,7 +521,8 @@ const BudgetApp = () => {
     const addManual = async () => { await dbService.add({ id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Nouvelle dépense", amount: -10, category: "Autre" }); window.dispatchEvent(new Event('budget-update')); };
     const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add({...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
     const deleteTx = async (id) => { await dbService.delete(id); window.dispatchEvent(new Event('budget-update')); };
-    const { currentTx, top5 } = getStats();
+    
+    const { top5 } = getStats();
 
     return (
         <div className="flex flex-col h-full bg-slate-50">
@@ -505,25 +533,67 @@ const BudgetApp = () => {
                 </div>
                 <button onClick={addManual} className="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold">+ Manuel</button>
             </div>
+            
             <div className="flex-1 overflow-y-auto px-4 pb-20">
                 {view === 'dashboard' && (
                     <div className="space-y-6">
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"><h3 className="text-sm font-bold text-gray-700 mb-2">Dépenses (6 mois)</h3><div className="h-48 relative"><canvas ref={barRef}></canvas></div></div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white p-4 rounded-xl shadow-sm"><h3 className="text-sm font-bold text-gray-700 mb-2">Répartition (Mois)</h3><div className="h-40 relative"><canvas ref={pieRef}></canvas></div></div>
-                            <div className="bg-white p-4 rounded-xl shadow-sm"><h3 className="text-sm font-bold text-gray-700 mb-2">Top 5 (Mois)</h3><div className="space-y-2">{top5.map(([n,a], i) => (<div key={i} className="flex justify-between text-xs items-center"><span className="truncate w-32 font-medium">{i+1}. {n}</span><span className="font-bold">{a.toFixed(2)}€</span></div>))}</div></div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm"><h3 className="text-sm font-bold text-gray-700 mb-2">Répartition (Mois en cours)</h3><div className="h-40 relative"><canvas ref={pieRef}></canvas></div></div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm"><h3 className="text-sm font-bold text-gray-700 mb-2">Top 5 (Mois en cours)</h3><div className="space-y-2">{top5.map(([n,a], i) => (<div key={i} className="flex justify-between text-xs items-center"><span className="truncate w-32 font-medium">{i+1}. {n}</span><span className="font-bold">{a.toFixed(2)}€</span></div>))}</div></div>
                         </div>
                     </div>
                 )}
+                
                 {view === 'list' && (
-                    <div className="space-y-2">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase">Mois en cours ({currentTx.length})</h3>
-                        {currentTx.map(t => (
-                            <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2">
-                                <div className="flex justify-between items-center"><input type="text" value={t.description} onChange={(e)=>updateTx(t.id,'description',e.target.value)} className="font-bold text-gray-700 bg-transparent w-full focus:outline-none" /><input type="number" step="0.01" value={t.amount} onChange={(e)=>updateTx(t.id,'amount',parseFloat(e.target.value))} className={`text-right w-20 font-bold bg-transparent focus:outline-none ${t.amount<0?'text-gray-800':'text-emerald-600'}`} /></div>
-                                <div className="flex justify-between items-center"><div className="flex gap-2"><input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-xs text-gray-400 bg-transparent" /><select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 uppercase font-bold">{Object.keys(CATEGORIES).concat(['Autre']).map(c=><option key={c} value={c}>{c}</option>)}</select></div><button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash"></i></button></div>
-                            </div>
-                        ))}
+                    <div className="space-y-4">
+                        {/* BARRE DE FILTRE ANNÉES */}
+                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                            <button 
+                                onClick={() => setFilterYear('Tout')}
+                                className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filterYear === 'Tout' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+                            >
+                                Tout
+                            </button>
+                            {availableYears.map(year => (
+                                <button 
+                                    key={year}
+                                    onClick={() => setFilterYear(year)}
+                                    className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filterYear === year ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+                                >
+                                    {year}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="space-y-2">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between">
+                                <span>{filterYear === 'Tout' ? 'Toutes les opérations' : `Année ${filterYear}`}</span>
+                                <span>{displayedTransactions.length}</span>
+                            </h3>
+                            
+                            {displayedTransactions.length === 0 && (
+                                <div className="text-center py-8 text-gray-400 text-sm">Aucune opération pour cette période.</div>
+                            )}
+
+                            {displayedTransactions.map(t => (
+                                <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2 animate-fade-in">
+                                    <div className="flex justify-between items-center">
+                                        <input type="text" value={t.description} onChange={(e)=>updateTx(t.id,'description',e.target.value)} className="font-bold text-gray-700 bg-transparent w-full focus:outline-none" />
+                                        <input type="number" step="0.01" value={t.amount} onChange={(e)=>updateTx(t.id,'amount',parseFloat(e.target.value))} className={`text-right w-20 font-bold bg-transparent focus:outline-none ${t.amount<0?'text-gray-800':'text-emerald-600'}`} />
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex gap-2">
+                                            <input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-xs text-gray-400 bg-transparent" />
+                                            <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 uppercase font-bold">
+                                                {Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                        </div>
+                                        <button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash"></i></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>
