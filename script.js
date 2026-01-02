@@ -1,5 +1,11 @@
 /**
- * INVEST TRACK V5 - CORE LOGIC (CORRECTED & DEBUGGED)
+ * INVEST TRACK V5 - CORE LOGIC (FULL VERSION)
+ * * Architecture :
+ * 1. dbService : IndexedDB pour le Budget (Stockage de masse)
+ * 2. app : Logique Bourse (Vanilla JS + LocalStorage + Chart.js)
+ * 3. BudgetApp : Interface Budget (React + Chart.js)
+ * 4. pdfImporter : Connecteur IA Google Gemini (Multi-modèles)
+ * 5. infoModule : Gestion de version et mises à jour
  */
 
 const { useState, useEffect, useRef } = React;
@@ -56,6 +62,14 @@ const dbService = {
             tx.objectStore(this.storeName).delete(id);
             tx.oncomplete = () => resolve();
         });
+    },
+
+    async estimateSize() {
+        if (navigator.storage && navigator.storage.estimate) {
+            const est = await navigator.storage.estimate();
+            return (est.usage / 1024 / 1024).toFixed(2) + " MB";
+        }
+        return "N/A";
     }
 };
 
@@ -65,48 +79,66 @@ const dbService = {
 const app = {
     transactions: [],
     currentPrices: {},
-    charts: {},
+    charts: {}, // Stocke les instances Chart.js pour pouvoir les détruire
     
+    // Base de données locale pour l'autocomplétion des tickers
     tickerDB: {
         'total': 'TTE.PA', 'vinci': 'DG.PA', 'air liquide': 'AI.PA', 'lvmh': 'MC.PA', 
         'sanofi': 'SAN.PA', 'schneider': 'SU.PA', 'loreal': 'OR.PA', 'hermes': 'RMS.PA',
         'bnpp': 'BNP.PA', 'axa': 'CS.PA', 'apple': 'AAPL', 'microsoft': 'MSFT', 
-        'tesla': 'TSLA', 'amazon': 'AMZN', 'google': 'GOOGL', 'meta': 'META'
+        'tesla': 'TSLA', 'amazon': 'AMZN', 'google': 'GOOGL', 'meta': 'META', 
+        'nvidia': 'NVDA', 'cw8': 'CW8.PA', 'sp500': 'SP500', 'accor': 'AC.PA'
     },
     
+    // Données simulées pour les dividendes (en € par action)
     mockDividends: {
         'Action Vinci': { current: 4.50 }, 'Total Energie': { current: 3.20 },
-        'Accor': { current: 1.10 }, 'Mercedes': { current: 5.30 }, 'Neurones': { current: 1.20 }
+        'Accor': { current: 1.10 }, 'Mercedes': { current: 5.30 }, 'Neurones': { current: 1.20 },
+        'Air Liquide': { current: 3.30 }, 'AXA': { current: 1.98 }, 'BNP Paribas': { current: 4.60 }
     },
 
-    tips: ["Diversifiez !", "Intérêts composés = Magie.", "Patience est mère de vertu.", "Achetez la peur."],
+    tips: [
+        "La diversification est la seule gratuité en finance.", "L'intérêt composé est la 8ème merveille du monde.",
+        "Le temps est votre meilleur allié.", "Achetez quand le sang coule.", "Réinvestissez vos dividendes.",
+        "N'investissez que ce que vous pouvez perdre."
+    ],
 
     init: function() {
         this.loadData();
         this.loadDailyTip();
         this.setupAutoFill();
+        // Navigation initiale
         this.nav('home');
     },
 
     nav: function(id) {
+        // Masquer toutes les sections
         document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
+        
+        // Afficher la cible
         const target = document.getElementById(id + '-view');
         if(target) target.classList.remove('hidden');
         
-        // Rafraîchissement des données selon la vue
-        if(id === 'dashboard') { this.calcKPIs(); setTimeout(() => this.renderPie(), 100); }
+        // Logique spécifique par vue (Rafraîchissement des données/Graphiques)
+        if(id === 'dashboard') { 
+            this.calcKPIs(); 
+            // Petit délai pour que le canvas soit rendu
+            setTimeout(() => this.renderPie(), 100); 
+        }
         if(id === 'assets') this.renderAssets();
         if(id === 'transactions') this.renderTable();
         if(id === 'projections') setTimeout(() => this.renderProjections(), 100);
         if(id === 'dividends') this.renderDividends();
         
+        // Scroll en haut
         window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
+    // --- Gestion des Données (LocalStorage) ---
     loadData: function() {
         const tx = localStorage.getItem('invest_v5_tx');
         if(tx) this.transactions = JSON.parse(tx);
-        else this.seedData();
+        else this.seedData(); // Données par défaut si vide
 
         const pr = localStorage.getItem('invest_v5_prices');
         if(pr) this.currentPrices = JSON.parse(pr);
@@ -120,19 +152,22 @@ const app = {
     seedData: function() {
         this.transactions = [
             {date:'2024-01-31', op:'Achat', name:'Action Vinci', account:'PEA', qty:15, price:93.53, sector:'Industrie'},
-            {date:'2024-11-12', op:'Achat', name:'Total Energie', account:'CTO', qty:5, price:60.32, sector:'Energie'}
+            {date:'2024-11-12', op:'Achat', name:'Total Energie', account:'CTO', qty:5, price:60.32, sector:'Energie'},
+            {date:'2025-05-06', op:'Achat', name:'Accor', account:'PEA', qty:20, price:42.00, sector:'Tourisme'}
         ];
         this.transactions.forEach(t => { if(t.op==='Achat') this.currentPrices[t.name] = t.price; });
         this.saveData();
     },
 
+    // --- Logique Métier ---
     updatePrice: function(name, price) {
         this.currentPrices[name] = parseFloat(price);
         this.saveData();
-        this.renderAssets();
+        this.renderAssets(); // Re-rendu pour mettre à jour les perfs
         this.toast("Prix mis à jour");
     },
 
+    // Calcule le portefeuille consolidé
     getPortfolio: function() {
         const assets = {};
         this.transactions.forEach(tx => {
@@ -143,7 +178,8 @@ const app = {
                 assets[tx.name].qty += tx.qty;
                 assets[tx.name].invested += (tx.qty * tx.price);
             } else if(tx.op === 'Vente') {
-                const pru = assets[tx.name].invested / (assets[tx.name].qty + tx.qty) || 0;
+                // Calcul du PRU moyen pondéré pour sortir la bonne valeur
+                const pru = assets[tx.name].invested / (assets[tx.name].qty + 0.000001); 
                 assets[tx.name].qty -= tx.qty;
                 assets[tx.name].invested -= (tx.qty * pru);
             }
@@ -156,7 +192,7 @@ const app = {
         let invested = 0, currentVal = 0;
 
         Object.values(assets).forEach(a => {
-            if(a.qty < 0.001) return;
+            if(a.qty < 0.001) return; // Ignore les lignes vendues
             invested += a.invested;
             const price = this.currentPrices[a.name] || (a.invested / a.qty);
             currentVal += (a.qty * price);
@@ -165,12 +201,15 @@ const app = {
         const diff = currentVal - invested;
         const perf = invested > 0 ? (diff / invested) * 100 : 0;
 
+        // Mise à jour DOM
         if(document.getElementById('kpiTotal')) {
             document.getElementById('kpiTotal').textContent = invested.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
             document.getElementById('kpiFuture').textContent = currentVal.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
+            
             const diffEl = document.getElementById('kpiDiff');
             diffEl.textContent = `${diff>=0?'+':''}${diff.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}`;
             diffEl.className = `sub-value ${diff>=0?'text-green-600':'text-red-500'}`;
+            
             const perfEl = document.getElementById('kpiReturn');
             perfEl.textContent = `${perf>=0?'+':''}${perf.toFixed(2)} %`;
             perfEl.className = `value ${perf>=0?'text-green-600':'text-red-500'}`;
@@ -178,15 +217,26 @@ const app = {
         return { invested, currentVal };
     },
 
+    // --- Graphiques (Chart.js) ---
     renderPie: function() {
         const ctx = document.getElementById('pieChart')?.getContext('2d');
         if(!ctx) return;
+        
+        // Détruire l'ancien graphique s'il existe
         if(this.charts.pie) this.charts.pie.destroy();
+        
         const acc = {};
-        this.transactions.filter(t=>t.op==='Achat').forEach(t => acc[t.account] = (acc[t.account]||0) + (t.qty*t.price));
+        this.transactions.filter(t=>t.op==='Achat').forEach(t => acc[t.account || 'Autre'] = (acc[t.account || 'Autre']||0) + (t.qty*t.price));
+
         this.charts.pie = new Chart(ctx, {
             type: 'doughnut',
-            data: { labels: Object.keys(acc), datasets: [{ data: Object.values(acc), backgroundColor: ['#3b82f6','#8b5cf6','#10b981','#f59e0b'] }] },
+            data: { 
+                labels: Object.keys(acc), 
+                datasets: [{ 
+                    data: Object.values(acc), 
+                    backgroundColor: ['#3b82f6','#8b5cf6','#10b981','#f59e0b', '#ec4899'] 
+                }] 
+            },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
         });
     },
@@ -194,24 +244,45 @@ const app = {
     renderProjections: function() {
         const ctx = document.getElementById('mainProjectionChart')?.getContext('2d');
         if(!ctx) return;
+
         if(this.charts.proj) this.charts.proj.destroy();
+
         const years = parseInt(document.getElementById('projYears').value) || 20;
         const labels = Array.from({length: years+1}, (_, i) => `An ${i}`);
         
+        // Calcul du taux de croissance basé sur la perf actuelle
         const kpis = this.calcKPIs();
-        let growthRate = 0.05;
-        if(kpis.invested > 0) growthRate = Math.max(0.02, Math.min(0.15, (kpis.currentVal - kpis.invested) / kpis.invested));
+        let growthRate = 0.05; // 5% par défaut
+        if(kpis.invested > 0) {
+            growthRate = (kpis.currentVal - kpis.invested) / kpis.invested;
+            // Bornes réalistes pour la projection
+            if(growthRate < 0.02) growthRate = 0.02; 
+            if(growthRate > 0.15) growthRate = 0.15; 
+        }
 
         let cap = 0;
+        // Calcul du capital actuel net
         this.transactions.forEach(t => { if(t.op==='Achat') cap += t.qty*t.price; if(t.op==='Vente') cap -= t.qty*t.price; });
+
         const data = [cap];
         for(let i=1; i<=years; i++) data.push(data[i-1] * (1 + growthRate));
 
         this.charts.proj = new Chart(ctx, {
             type: 'line',
-            data: { labels, datasets: [{ label: `Capital (Taux: ${(growthRate*100).toFixed(1)}%)`, data, borderColor: '#9333ea', backgroundColor: 'rgba(147, 51, 234, 0.1)', fill: true }] },
+            data: { 
+                labels, 
+                datasets: [{ 
+                    label: `Capital (Taux: ${(growthRate*100).toFixed(1)}%)`, 
+                    data, 
+                    borderColor: '#9333ea', 
+                    backgroundColor: 'rgba(147, 51, 234, 0.1)', 
+                    fill: true, 
+                    tension: 0.4 
+                }] 
+            },
             options: { maintainAspectRatio: false }
         });
+        
         this.renderYearlyBar();
         this.renderFrequency();
     },
@@ -220,14 +291,16 @@ const app = {
         const ctx = document.getElementById('yearlyBarChart')?.getContext('2d');
         if(!ctx) return;
         if(this.charts.bar) this.charts.bar.destroy();
+
         const yData = {};
         this.transactions.filter(t=>t.op==='Achat').forEach(t => {
             const y = t.date.split('-')[0];
             yData[y] = (yData[y]||0) + (t.qty*t.price);
         });
+
         this.charts.bar = new Chart(ctx, {
             type: 'bar',
-            data: { labels: Object.keys(yData).sort(), datasets: [{ label:'Investi', data:Object.values(yData), backgroundColor:'#10b981' }] },
+            data: { labels: Object.keys(yData).sort(), datasets: [{ label:'Investi', data:Object.values(yData), backgroundColor:'#10b981', borderRadius:4 }] },
             options: { maintainAspectRatio: false }
         });
     },
@@ -236,22 +309,26 @@ const app = {
         const ctx = document.getElementById('frequencyChart')?.getContext('2d');
         if(!ctx) return;
         if(this.charts.freq) this.charts.freq.destroy();
+
         let count = 0;
         const sorted = [...this.transactions].sort((a,b)=>new Date(a.date)-new Date(b.date));
         const data = sorted.map(t => ++count);
         const labels = sorted.map(t => t.date);
+
         this.charts.freq = new Chart(ctx, {
             type: 'line',
-            data: { labels, datasets: [{ label:'Opérations', data, borderColor:'#6366f1', pointRadius:0 }] },
+            data: { labels, datasets: [{ label:'Opérations cumulées', data, borderColor:'#6366f1', pointRadius:0 }] },
             options: { maintainAspectRatio: false, scales: { x: { display: false } } }
         });
     },
 
+    // --- Rendu HTML (Tableaux & Grilles) ---
     renderAssets: function() {
         const grid = document.getElementById('assetsGrid');
         if(!grid) return;
         grid.innerHTML = '';
         const assets = this.getPortfolio();
+
         Object.values(assets).forEach(a => {
             if(a.qty < 0.001) return;
             const pru = a.invested/a.qty;
@@ -270,7 +347,8 @@ const app = {
                     <div class="p-5">
                         <div class="flex justify-between items-center mb-3">
                             <span class="text-gray-500 text-xs font-bold uppercase">Cours Actuel</span>
-                            <input type="number" step="0.01" value="${curr.toFixed(2)}" onchange="app.updatePrice('${a.name}', this.value)" class="price-input">
+                            <input type="number" step="0.01" value="${curr.toFixed(2)}" 
+                                onchange="app.updatePrice('${a.name}', this.value)" class="price-input">
                         </div>
                         <div class="flex justify-between mb-1"><span class="text-gray-500 text-xs">PRU</span><span class="font-mono text-gray-600">${pru.toFixed(2)} €</span></div>
                         <div class="flex justify-between items-end">
@@ -345,10 +423,12 @@ const app = {
             document.getElementById('noDividends').classList.remove('hidden');
     },
 
+    // --- Helpers (Forms, Toast, Utils) ---
     openModal: function(mode, idx=null) {
         document.getElementById('modalForm').classList.remove('hidden');
         document.getElementById('editIndex').value = idx !== null ? idx : '';
         document.getElementById('modalTitle').textContent = mode==='new' ? 'Nouvelle Transaction' : 'Modifier Transaction';
+        
         if(mode==='new') {
             document.getElementById('fDate').value = new Date().toISOString().split('T')[0];
             ['fName','fTicker','fAccount','fSector','fQty','fPrice'].forEach(id => document.getElementById(id).value = '');
@@ -379,11 +459,15 @@ const app = {
             qty: parseFloat(document.getElementById('fQty').value)||0,
             price: parseFloat(document.getElementById('fPrice').value)||0
         };
-        if(idx !== '') this.transactions[idx] = tx; else this.transactions.push(tx);
+        if(idx !== '') this.transactions[idx] = tx;
+        else this.transactions.push(tx);
+        
         this.saveData(); this.closeModal(); this.toast(idx!==''?"Modifié":"Ajouté"); this.renderTable();
     },
+    
     deleteTx: function(idx) { if(confirm('Supprimer ?')) { this.transactions.splice(idx,1); this.saveData(); this.renderTable(); } },
     
+    // Import Excel (Invest)
     handleImport: function(e) {
         const r = new FileReader();
         r.onload = ev => {
@@ -395,10 +479,13 @@ const app = {
                 if(typeof d==='number') d = new Date(Math.round((d-25569)*86400*1000)).toISOString().split('T')[0];
                 const tx = {
                     date: d || new Date().toISOString().split('T')[0],
-                    op: row['Operation'] || 'Achat',
-                    name: row['Nom actif'] || 'Inconnu',
-                    qty: parseFloat(row['Quantité']) || 0,
-                    price: parseFloat(row['Prix unitaire']) || 0
+                    op: row['Operation'] || row['Opération'] || row['Type'] || 'Achat',
+                    name: row['Nom actif'] || row['Nom_Actif'] || row['Nom'] || 'Inconnu',
+                    ticker: row['Ticker'] || '',
+                    account: row['Compte'] || '',
+                    sector: row['Secteur'] || '',
+                    qty: parseFloat(row['Quantité']||row['Qty']) || 0,
+                    price: parseFloat(row['Prix unitaire']||row['Prix']||row['PRU_Moyen']) || 0
                 };
                 if(tx.qty > 0) { this.transactions.push(tx); count++; }
             });
@@ -406,12 +493,15 @@ const app = {
         };
         r.readAsArrayBuffer(e.target.files[0]);
     },
+    
+    // Export Excel (Invest)
     exportExcel: function() {
         const ws = XLSX.utils.json_to_sheet(this.transactions);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Transactions");
         XLSX.writeFile(wb, "InvestTrack_Export.xlsx");
     },
+
     setupAutoFill: function() {
         const el = document.getElementById('fName');
         if(el) {
@@ -421,14 +511,19 @@ const app = {
             });
         }
     },
-    searchTicker: function() { const n = document.getElementById('fName').value; if(n) window.open(`https://www.google.com/search?q=ticker+${encodeURIComponent(n)}`, '_blank'); },
+    searchTicker: function() {
+        const n = document.getElementById('fName').value;
+        if(n) window.open(`https://www.google.com/search?q=ticker+${encodeURIComponent(n)}`, '_blank');
+        else alert('Saisissez un nom');
+    },
+    
     strColor: function(s,l,d) { let h=0; for(let i=0;i<s.length;i++)h=s.charCodeAt(i)+((h<<5)-h); return `hsl(${h%360},${l}%,${d}%)`; },
     loadDailyTip: function() { document.getElementById('dailyTip').textContent = `"${this.tips[new Date().getDate()%this.tips.length]}"`; },
     toast: function(m) { const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=m; t.classList.remove('translate-y-20','opacity-0'); setTimeout(()=>t.classList.add('translate-y-20','opacity-0'),2500); }
 };
 
 // =================================================================
-// 2. BUDGET SCAN APP (REACT + CHARTS)
+// 2. BUDGET SCAN APP (REACT + CHARTS) - CORRIGÉ & COMPLET
 // =================================================================
 const CATEGORIES = {
     'Alimentation': ['carrefour', 'leclerc', 'auchan', 'lidl', 'courses', 'burger king', 'mcdonalds', 'tacos', 'bouillon', 'super u'],
@@ -442,84 +537,127 @@ const CATEGORIES = {
 const BudgetApp = () => {
     const [transactions, setTransactions] = useState([]);
     const [view, setView] = useState('dashboard');
-    const [filterYear, setFilterYear] = useState('Tout');
+    const [filterYear, setFilterYear] = useState('Tout'); // Filtre année
     const barRef = useRef(null);
     const pieRef = useRef(null);
 
-    // Initialisation et Écouteur d'événement pour l'Import IA
+    // Initialisation
     useEffect(() => {
         const load = async () => {
             await dbService.init();
             const data = await dbService.getAll('budget');
             setTransactions(data.sort((a,b) => new Date(b.date) - new Date(a.date)));
         };
+        load();
         
-        load(); // Premier chargement
-
-        // Quand l'IA termine, on recharge ET on bascule sur la vue liste + Tout voir
-        const handleUpdate = () => {
+        // CORRECTION IMPORT : On force la vue 'Liste' et 'Tout' quand l'import est fini
+        const handleImport = () => {
             load();
-            setView('list'); // <-- AUTO SWITCH
-            setFilterYear('Tout'); // <-- FORCE DISPLAY ALL YEARS
+            setView('list');
+            setFilterYear('Tout');
         };
 
-        window.addEventListener('budget-update', handleUpdate);
-        return () => window.removeEventListener('budget-update', handleUpdate);
+        window.addEventListener('budget-update', handleImport);
+        return () => window.removeEventListener('budget-update', handleImport);
     }, []);
 
+    // Helpers Stats pour Dashboard
     const getStats = () => {
         const now = new Date();
-        const currentM = now.getMonth(), currentY = now.getFullYear();
-        const currentTx = transactions.filter(t => { 
-            const d = new Date(t.date); 
-            return d.getMonth()===currentM && d.getFullYear()===currentY; 
+        const currentM = now.getMonth();
+        const currentY = now.getFullYear();
+
+        const currentTx = transactions.filter(t => {
+            const d = new Date(t.date);
+            return d.getMonth()===currentM && d.getFullYear()===currentY;
         });
 
         const merchants = {};
-        currentTx.forEach(t => { if(t.amount < 0) merchants[t.description] = (merchants[t.description]||0) + Math.abs(t.amount); });
+        currentTx.forEach(t => {
+            if(t.amount < 0) merchants[t.description] = (merchants[t.description]||0) + Math.abs(t.amount);
+        });
         const top5 = Object.entries(merchants).sort((a,b) => b[1]-a[1]).slice(0,5);
 
         const cats = {};
-        currentTx.forEach(t => { if(t.amount < 0) cats[t.category] = (cats[t.category]||0) + Math.abs(t.amount); });
+        currentTx.forEach(t => {
+            if(t.amount < 0) cats[t.category] = (cats[t.category]||0) + Math.abs(t.amount);
+        });
 
         const sixM = {};
-        for(let i=5; i>=0; i--) { 
-            const d = new Date(now.getFullYear(), now.getMonth()-i, 1); 
-            sixM[`${d.getMonth()+1}/${d.getFullYear()}`] = 0; 
+        for(let i=5; i>=0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+            sixM[`${d.getMonth()+1}/${d.getFullYear()}`] = 0;
         }
-        transactions.forEach(t => { 
-            if(t.amount < 0) { 
-                const d = new Date(t.date); 
-                const k = `${d.getMonth()+1}/${d.getFullYear()}`; 
-                if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount); 
-            } 
+        transactions.forEach(t => {
+            if(t.amount < 0) {
+                const d = new Date(t.date);
+                const k = `${d.getMonth()+1}/${d.getFullYear()}`;
+                if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount);
+            }
         });
+
         return { currentTx, top5, cats, sixM };
     };
 
-    const availableYears = Array.from(new Set(transactions.map(t => (t.date||'').split('-')[0]))).filter(y => y).sort().reverse();
+    // Filtres Années
+    const availableYears = Array.from(new Set(transactions.map(t => (t.date||'').split('-')[0]))).filter(y=>y).sort().reverse();
     const displayedTransactions = filterYear === 'Tout' ? transactions : transactions.filter(t => t.date.startsWith(filterYear));
 
+    // Gestion Graphiques
     useEffect(() => {
         if(view !== 'dashboard') return;
         const { cats, sixM } = getStats();
+
+        // Délai pour s'assurer que le canvas est dans le DOM
         setTimeout(() => {
             if(pieRef.current) {
                 if(window.bPie) window.bPie.destroy();
                 const ctx = pieRef.current.getContext('2d');
-                window.bPie = new Chart(ctx, { type: 'doughnut', data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#ec4899'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } } });
+                window.bPie = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { 
+                        labels: Object.keys(cats), 
+                        datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#ec4899'] }] 
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                });
             }
             if(barRef.current) {
                 if(window.bBar) window.bBar.destroy();
                 const ctx = barRef.current.getContext('2d');
-                window.bBar = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(sixM), datasets: [{ label: 'Dépenses', data: Object.values(sixM), backgroundColor: '#10b981', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false } });
+                window.bBar = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(sixM),
+                        datasets: [{ label: 'Dépenses', data: Object.values(sixM), backgroundColor: '#10b981', borderRadius: 4 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
             }
         }, 100);
     }, [transactions, view]);
 
-    const addManual = async () => { await dbService.add({ id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Nouvelle dépense", amount: -10, category: "Autre" }); window.dispatchEvent(new Event('budget-update')); };
-    const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add({...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
-    const deleteTx = async (id) => { await dbService.delete(id); window.dispatchEvent(new Event('budget-update')); };
+    // Actions CRUD
+    const addManual = async () => {
+        const tx = { id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Nouvelle dépense", amount: -10, category: "Autre" };
+        await dbService.add(tx);
+        window.dispatchEvent(new Event('budget-update'));
+    };
+
+    const updateTx = async (id, f, v) => {
+        const tx = transactions.find(t=>t.id===id);
+        if(tx) {
+            await dbService.add({...tx, [f]:v});
+            setTransactions(prev => prev.map(t=>t.id===id ? {...tx, [f]:v} : t));
+        }
+    };
+
+    const deleteTx = async (id) => {
+        await dbService.delete(id);
+        setTransactions(prev => prev.filter(t=>t.id!==id));
+        window.dispatchEvent(new Event('budget-update')); // Pour mettre à jour les graphs
+    };
+
     const { top5 } = getStats();
 
     return (
@@ -531,29 +669,55 @@ const BudgetApp = () => {
                 </div>
                 <button onClick={addManual} className="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold">+ Manuel</button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto px-4 pb-20">
                 {view === 'dashboard' && (
                     <div className="space-y-6">
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"><h3 className="text-sm font-bold text-gray-700 mb-2">Dépenses (6 mois)</h3><div className="h-48 relative"><canvas ref={barRef}></canvas></div></div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-sm font-bold text-gray-700 mb-2">Dépenses (6 mois)</h3>
+                            <div className="h-48 relative"><canvas ref={barRef}></canvas></div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white p-4 rounded-xl shadow-sm"><h3 className="text-sm font-bold text-gray-700 mb-2">Répartition (Mois en cours)</h3><div className="h-40 relative"><canvas ref={pieRef}></canvas></div></div>
-                            <div className="bg-white p-4 rounded-xl shadow-sm"><h3 className="text-sm font-bold text-gray-700 mb-2">Top 5 (Mois en cours)</h3><div className="space-y-2">{top5.map(([n,a], i) => (<div key={i} className="flex justify-between text-xs items-center"><span className="truncate w-32 font-medium">{i+1}. {n}</span><span className="font-bold">{a.toFixed(2)}€</span></div>))}</div></div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm">
+                                <h3 className="text-sm font-bold text-gray-700 mb-2">Répartition (Mois)</h3>
+                                <div className="h-40 relative"><canvas ref={pieRef}></canvas></div>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm">
+                                <h3 className="text-sm font-bold text-gray-700 mb-2">Top 5 (Mois)</h3>
+                                <div className="space-y-2">
+                                    {top5.map(([n,a], i) => (
+                                        <div key={i} className="flex justify-between text-xs items-center">
+                                            <span className="truncate w-32 font-medium">{i+1}. {n}</span>
+                                            <span className="font-bold">{a.toFixed(2)}€</span>
+                                        </div>
+                                    ))}
+                                    {top5.length===0 && <p className="text-xs text-gray-400">Aucune donnée.</p>}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
-                
+
                 {view === 'list' && (
                     <div className="space-y-4">
+                        {/* Filtre Année */}
                         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                             <button onClick={() => setFilterYear('Tout')} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filterYear === 'Tout' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>Tout</button>
                             {availableYears.map(year => (
                                 <button key={year} onClick={() => setFilterYear(year)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filterYear === year ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>{year}</button>
                             ))}
                         </div>
+
                         <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between"><span>{filterYear === 'Tout' ? 'Toutes les opérations' : `Année ${filterYear}`}</span><span>{displayedTransactions.length}</span></h3>
-                            {displayedTransactions.length === 0 && (<div className="text-center py-8 text-gray-400 text-sm">Aucune opération pour cette période.</div>)}
+                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between">
+                                <span>{filterYear === 'Tout' ? 'Toutes les opérations' : `Année ${filterYear}`}</span>
+                                <span>{displayedTransactions.length}</span>
+                            </h3>
+                            
+                            {displayedTransactions.length === 0 && (
+                                <div className="text-center py-8 text-gray-400 text-sm">Aucune opération pour cette période.</div>
+                            )}
+
                             {displayedTransactions.map(t => (
                                 <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2 animate-fade-in">
                                     <div className="flex justify-between items-center">
@@ -561,7 +725,12 @@ const BudgetApp = () => {
                                         <input type="number" step="0.01" value={t.amount} onChange={(e)=>updateTx(t.id,'amount',parseFloat(e.target.value))} className={`text-right w-20 font-bold bg-transparent focus:outline-none ${t.amount<0?'text-gray-800':'text-emerald-600'}`} />
                                     </div>
                                     <div className="flex justify-between items-center">
-                                        <div className="flex gap-2"><input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-xs text-gray-400 bg-transparent" /><select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 uppercase font-bold">{Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                                        <div className="flex gap-2">
+                                            <input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-xs text-gray-400 bg-transparent" />
+                                            <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 uppercase font-bold">
+                                                {Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                        </div>
                                         <button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash"></i></button>
                                     </div>
                                 </div>
@@ -575,7 +744,7 @@ const BudgetApp = () => {
 };
 
 // =================================================================
-// 3. SMART PDF/IMAGE IMPORTER (MODULE IA COMPLET)
+// 3. SMART PDF/IMAGE IMPORTER (MODULE IA - COMPLET)
 // =================================================================
 const pdfImporter = {
     apiKey: '',
@@ -682,6 +851,7 @@ const pdfImporter = {
                 if(!d.candidates?.[0]?.content) throw new Error("Réponse vide/bloquée.");
 
                 let raw = d.candidates[0].content.parts[0].text;
+                // Nettoyage JSON robuste
                 const match = raw.match(/\[[\s\S]*\]/);
                 if(match) raw = match[0];
                 else raw = raw.replace(/```json/g,'').replace(/```/g,'').trim();
@@ -720,9 +890,13 @@ const pdfImporter = {
         await dbService.init();
         let count = 0;
         for(const item of this.extracted) {
-            // Nettoyage de la date pour éviter les erreurs de format (YYYY-MM-DD strict)
+            // Nettoyage de la date (Format YYYY-MM-DD strict)
             let cleanDate = item.date;
-            if(cleanDate && cleanDate.includes('/')) cleanDate = cleanDate.replace(/\//g, '-');
+            if(cleanDate && cleanDate.includes('/')) {
+                // Conversion DD/MM/YYYY -> YYYY-MM-DD si nécessaire
+                const parts = cleanDate.split('/');
+                if(parts.length === 3) cleanDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
             
             await dbService.add({
                 id: Date.now() + Math.random(),
@@ -735,15 +909,16 @@ const pdfImporter = {
         }
         this.close();
         
-        // Notification + Switch de vue géré par l'événement dans BudgetApp
+        // CORRECTION MAJEURE: Force la navigation vers la vue Budget et recharge
+        window.app.nav('budget');
         window.dispatchEvent(new Event('budget-update'));
         
-        // Petit toast de confirmation
-        const toast = document.getElementById('toast');
-        if(toast) {
+        // Notification
+        const t = document.getElementById('toast');
+        if(t) {
             document.getElementById('toastMsg').innerText = `${count} importés`;
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2500);
+            t.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 2500);
         }
     }
 };
@@ -785,15 +960,22 @@ const infoModule = {
 // 5. BOOTSTRAP
 // =================================================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Export global
     window.app = app;
     window.infoModule = infoModule;
     window.pdfImporter = pdfImporter;
 
+    // Init Logic Vanilla
     app.init();
     infoModule.init();
 
+    // Init Logic React
     const rootEl = document.getElementById('budget-root');
-    if(rootEl) ReactDOM.createRoot(rootEl).render(<BudgetApp />);
+    if(rootEl) {
+        const root = ReactDOM.createRoot(rootEl);
+        root.render(<BudgetApp />);
+    }
     
+    // Init Icons
     if(window.lucide) lucide.createIcons();
 });
