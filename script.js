@@ -1,5 +1,5 @@
 /**
- * INVEST TRACK V5 - CORE LOGIC (COMPLETE & AI ENHANCED)
+ * INVEST TRACK V5 - CORE LOGIC (CORRECTED & DEBUGGED)
  */
 
 const { useState, useEffect, useRef } = React;
@@ -428,7 +428,7 @@ const app = {
 };
 
 // =================================================================
-// 2. BUDGET SCAN APP (REACT + CHARTS) - AVEC FILTRE ANNÉES
+// 2. BUDGET SCAN APP (REACT + CHARTS)
 // =================================================================
 const CATEGORIES = {
     'Alimentation': ['carrefour', 'leclerc', 'auchan', 'lidl', 'courses', 'burger king', 'mcdonalds', 'tacos', 'bouillon', 'super u'],
@@ -442,28 +442,34 @@ const CATEGORIES = {
 const BudgetApp = () => {
     const [transactions, setTransactions] = useState([]);
     const [view, setView] = useState('dashboard');
-    const [filterYear, setFilterYear] = useState('Tout'); // Nouvel état pour le filtre
+    const [filterYear, setFilterYear] = useState('Tout');
     const barRef = useRef(null);
     const pieRef = useRef(null);
 
-    // Chargement initial
+    // Initialisation et Écouteur d'événement pour l'Import IA
     useEffect(() => {
         const load = async () => {
             await dbService.init();
             const data = await dbService.getAll('budget');
             setTransactions(data.sort((a,b) => new Date(b.date) - new Date(a.date)));
         };
-        load();
-        window.addEventListener('budget-update', load);
-        return () => window.removeEventListener('budget-update', load);
+        
+        load(); // Premier chargement
+
+        // Quand l'IA termine, on recharge ET on bascule sur la vue liste + Tout voir
+        const handleUpdate = () => {
+            load();
+            setView('list'); // <-- AUTO SWITCH
+            setFilterYear('Tout'); // <-- FORCE DISPLAY ALL YEARS
+        };
+
+        window.addEventListener('budget-update', handleUpdate);
+        return () => window.removeEventListener('budget-update', handleUpdate);
     }, []);
 
-    // --- Helpers Stats ---
     const getStats = () => {
         const now = new Date();
         const currentM = now.getMonth(), currentY = now.getFullYear();
-        
-        // Filtre dashboard (Mois en cours)
         const currentTx = transactions.filter(t => { 
             const d = new Date(t.date); 
             return d.getMonth()===currentM && d.getFullYear()===currentY; 
@@ -491,16 +497,9 @@ const BudgetApp = () => {
         return { currentTx, top5, cats, sixM };
     };
 
-    // --- Helpers Filtres ---
-    // Récupère la liste unique des années présentes dans les transactions
-    const availableYears = Array.from(new Set(transactions.map(t => t.date.split('-')[0]))).sort().reverse();
-    
-    // Filtre la liste affichée selon l'année choisie
-    const displayedTransactions = filterYear === 'Tout' 
-        ? transactions 
-        : transactions.filter(t => t.date.startsWith(filterYear));
+    const availableYears = Array.from(new Set(transactions.map(t => (t.date||'').split('-')[0]))).filter(y => y).sort().reverse();
+    const displayedTransactions = filterYear === 'Tout' ? transactions : transactions.filter(t => t.date.startsWith(filterYear));
 
-    // --- Graphiques ---
     useEffect(() => {
         if(view !== 'dashboard') return;
         const { cats, sixM } = getStats();
@@ -521,7 +520,6 @@ const BudgetApp = () => {
     const addManual = async () => { await dbService.add({ id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Nouvelle dépense", amount: -10, category: "Autre" }); window.dispatchEvent(new Event('budget-update')); };
     const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add({...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
     const deleteTx = async (id) => { await dbService.delete(id); window.dispatchEvent(new Event('budget-update')); };
-    
     const { top5 } = getStats();
 
     return (
@@ -547,35 +545,15 @@ const BudgetApp = () => {
                 
                 {view === 'list' && (
                     <div className="space-y-4">
-                        {/* BARRE DE FILTRE ANNÉES */}
                         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                            <button 
-                                onClick={() => setFilterYear('Tout')}
-                                className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filterYear === 'Tout' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
-                            >
-                                Tout
-                            </button>
+                            <button onClick={() => setFilterYear('Tout')} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filterYear === 'Tout' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>Tout</button>
                             {availableYears.map(year => (
-                                <button 
-                                    key={year}
-                                    onClick={() => setFilterYear(year)}
-                                    className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filterYear === year ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
-                                >
-                                    {year}
-                                </button>
+                                <button key={year} onClick={() => setFilterYear(year)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${filterYear === year ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>{year}</button>
                             ))}
                         </div>
-
                         <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between">
-                                <span>{filterYear === 'Tout' ? 'Toutes les opérations' : `Année ${filterYear}`}</span>
-                                <span>{displayedTransactions.length}</span>
-                            </h3>
-                            
-                            {displayedTransactions.length === 0 && (
-                                <div className="text-center py-8 text-gray-400 text-sm">Aucune opération pour cette période.</div>
-                            )}
-
+                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between"><span>{filterYear === 'Tout' ? 'Toutes les opérations' : `Année ${filterYear}`}</span><span>{displayedTransactions.length}</span></h3>
+                            {displayedTransactions.length === 0 && (<div className="text-center py-8 text-gray-400 text-sm">Aucune opération pour cette période.</div>)}
                             {displayedTransactions.map(t => (
                                 <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2 animate-fade-in">
                                     <div className="flex justify-between items-center">
@@ -583,12 +561,7 @@ const BudgetApp = () => {
                                         <input type="number" step="0.01" value={t.amount} onChange={(e)=>updateTx(t.id,'amount',parseFloat(e.target.value))} className={`text-right w-20 font-bold bg-transparent focus:outline-none ${t.amount<0?'text-gray-800':'text-emerald-600'}`} />
                                     </div>
                                     <div className="flex justify-between items-center">
-                                        <div className="flex gap-2">
-                                            <input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-xs text-gray-400 bg-transparent" />
-                                            <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 uppercase font-bold">
-                                                {Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}
-                                            </select>
-                                        </div>
+                                        <div className="flex gap-2"><input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-xs text-gray-400 bg-transparent" /><select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 uppercase font-bold">{Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}</select></div>
                                         <button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash"></i></button>
                                     </div>
                                 </div>
@@ -602,7 +575,7 @@ const BudgetApp = () => {
 };
 
 // =================================================================
-// 3. SMART PDF/IMAGE IMPORTER (MODULE IA - CORRIGÉ & COMPLET)
+// 3. SMART PDF/IMAGE IMPORTER (MODULE IA COMPLET)
 // =================================================================
 const pdfImporter = {
     apiKey: '',
@@ -747,9 +720,13 @@ const pdfImporter = {
         await dbService.init();
         let count = 0;
         for(const item of this.extracted) {
+            // Nettoyage de la date pour éviter les erreurs de format (YYYY-MM-DD strict)
+            let cleanDate = item.date;
+            if(cleanDate && cleanDate.includes('/')) cleanDate = cleanDate.replace(/\//g, '-');
+            
             await dbService.add({
                 id: Date.now() + Math.random(),
-                date: item.date || new Date().toISOString().split('T')[0],
+                date: cleanDate || new Date().toISOString().split('T')[0],
                 description: item.description || 'Import IA',
                 amount: parseFloat(item.amount) || 0,
                 category: item.category || 'Import'
@@ -757,8 +734,17 @@ const pdfImporter = {
             count++;
         }
         this.close();
+        
+        // Notification + Switch de vue géré par l'événement dans BudgetApp
         window.dispatchEvent(new Event('budget-update'));
-        alert(`${count} transactions importées !`);
+        
+        // Petit toast de confirmation
+        const toast = document.getElementById('toast');
+        if(toast) {
+            document.getElementById('toastMsg').innerText = `${count} importés`;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2500);
+        }
     }
 };
 
