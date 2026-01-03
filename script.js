@@ -136,7 +136,10 @@ const app = {
         'cw8': 'CW8.PA',        
         'sp500': 'SPX',       
         'nasdaq': 'NDX',      
-        'ishares physical gold etc': 'IGLN',
+        // CORRECTION ICI : On raccourcit la clé pour qu'elle soit détectée plus facilement
+        'physical gold': 'IGLN', 
+        'ishares gold': 'IGLN',  // Ajout d'une variante pour être sûr
+        'gold etc': 'IGLN'       // Ajout d'une autre variante
 
         // Autres
         'CGM': 'GMF',            
