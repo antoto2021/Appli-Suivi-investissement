@@ -136,7 +136,7 @@ const app = {
         'cw8': 'CW8.PA',        
         'sp500': 'SPX',       
         'nasdaq': 'NDX',      
-        'Ishares Physical Gold ETC': 'IGLN',
+        'ishares physical gold etc': 'IGLN',
 
         // Autres
         'CGM': 'GMF',            
