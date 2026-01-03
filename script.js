@@ -101,11 +101,41 @@ const app = {
     currentPrices: {},
     charts: {},
     
+    // MINI BDD : CORRESPONDANCE NOMS -> TICKERS : Modifie cette liste pour ajouter tes propres actifs.
+    // Clé (gauche) : Mot clé en minuscule (partie du nom).
+    // Valeur (droite) : Le Ticker boursier exact.
     tickerDB: {
-        'total': 'TTE.PA', 'vinci': 'DG.PA', 'air liquide': 'AI.PA', 'lvmh': 'MC.PA', 
-        'sanofi': 'SAN.PA', 'schneider': 'SU.PA', 'loreal': 'OR.PA', 'hermes': 'RMS.PA',
-        'bnpp': 'BNP.PA', 'axa': 'CS.PA', 'apple': 'AAPL', 'microsoft': 'MSFT', 
-        'tesla': 'TSLA', 'amazon': 'AMZN', 'google': 'GOOGL', 'meta': 'META'
+        // --- FRANCE (CAC 40 / SBF 120) ---
+        'total': 'TTE.PA',        // TotalEnergies
+        'vinci': 'DG.PA',         // Vinci
+        'air liquide': 'AI.PA',   // Air Liquide
+        'lvmh': 'MC.PA',          // LVMH
+        'sanofi': 'SAN.PA',       // Sanofi
+        'schneider': 'SU.PA',     // Schneider Electric
+        'loreal': 'OR.PA',        // L'Oréal
+        'hermes': 'RMS.PA',       // Hermès
+        'bnpp': 'BNP.PA',         // BNP Paribas
+        'axa': 'CS.PA',           // AXA
+        'credit agricole': 'ACA.PA', // Crédit Agricole
+        'danone': 'BN.PA',        // Danone
+        'orange': 'ORA.PA',       // Orange
+        'renault': 'RNO.PA',      // Renault
+        'stellantis': 'STLAP.PA', // Stellantis
+
+        // --- USA (Tech & Indices) ---
+        'apple': 'AAPL',          // Apple
+        'microsoft': 'MSFT',      // Microsoft
+        'tesla': 'TSLA',          // Tesla
+        'amazon': 'AMZN',         // Amazon
+        'google': 'GOOGL',        // Alphabet
+        'meta': 'META',           // Meta (Facebook)
+        'nvidia': 'NVDA',         // Nvidia
+        'realty income': 'O',     // Realty Income (Immo)
+        
+        // --- ETFS ---
+        'cw8': 'CW8.PA',          // ETF World (Amundi)
+        'sp500': 'ESE.PA',        // ETF S&P 500 (BNP)
+        'nasdaq': 'PANX.PA'       // ETF Nasdaq
     },
     
     mockDividends: {
@@ -494,9 +524,26 @@ const app = {
                 const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
                 const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
                 let count = 0;
+                
                 for(const row of json) {
                     let d = row['Date']||row['Date_Entrée'];
                     if(typeof d==='number') d = new Date(Math.round((d-25569)*86400*1000)).toISOString().split('T')[0];
+                    
+                    // --- LOGIQUE DE DÉTECTION TICKER ---
+                    let detectedTicker = row['Ticker'] || ''; // Priorité au Excel
+                    
+                    if (!detectedTicker) {
+                        const lowerName = (row['Nom actif'] || '').toLowerCase();
+                        // Recherche dans notre BDD interne
+                        for (const [key, ticker] of Object.entries(this.tickerDB)) {
+                            if (lowerName.includes(key)) {
+                                detectedTicker = ticker;
+                                break;
+                            }
+                        }
+                    }
+                    // ------------------------------------
+
                     const tx = {
                         date: d || new Date().toISOString().split('T')[0],
                         op: row['Operation'] || 'Achat',
@@ -504,8 +551,9 @@ const app = {
                         qty: parseFloat(row['Quantité']) || 0,
                         price: parseFloat(row['Prix unitaire']) || 0,
                         account: row['Compte'] || '',
-                        ticker: row['Ticker'] || ''
+                        ticker: detectedTicker // Utilisation du ticker détecté
                     };
+                    
                     if(tx.qty > 0) { await this.addTransaction(tx); count++; }
                 }
                 this.toast(`${count} importés`); this.renderTable();
@@ -522,11 +570,25 @@ const app = {
         XLSX.writeFile(wb, "InvestTrack_Export.xlsx");
     },
     setupAutoFill: function() {
-        const el = document.getElementById('fName');
-        if(el) {
-            el.addEventListener('blur', (e) => {
+        const nameInput = document.getElementById('fName');
+        if(nameInput) {
+            // Événement "blur" = quand on clique en dehors du champ
+            nameInput.addEventListener('blur', (e) => {
                 const val = e.target.value.toLowerCase().trim();
-                for(const [k,t] of Object.entries(this.tickerDB)) { if(val.includes(k)) { document.getElementById('fTicker').value=t; break; }}
+                const tickerInput = document.getElementById('fTicker');
+                
+                // On ne remplace pas si l'utilisateur a déjà mis un ticker manuellement
+                if(tickerInput.value !== '') return;
+
+                // On cherche dans la BDD
+                for(const [key, ticker] of Object.entries(this.tickerDB)) {
+                    // Si le nom saisi contient le mot clé (ex: "Action Total" contient "total")
+                    if(val.includes(key)) { 
+                        tickerInput.value = ticker; 
+                        this.toast(`Ticker trouvé : ${ticker}`);
+                        break; 
+                    }
+                }
             });
         }
     },
