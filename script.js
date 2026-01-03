@@ -112,7 +112,7 @@ const app = {
         // --- ETFS ---
         'cw8': 'CW8.PA',          // ETF World (Amundi)
         'sp500': 'SPX',        // ETF S&P 500 (BNP)
-        'nasdaq': 'NDX'       // ETF Nasdaq
+        'nasdaq': 'NDX',       // ETF Nasdaq
         'Ishares Physical Gold ETC': 'IGLN',    // ETF Or
 
         // --- Autres ---
