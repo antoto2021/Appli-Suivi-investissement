@@ -1,6 +1,6 @@
 /**
- * INVEST TRACK V5 - COMPLETE & UNIFIED
- * Full Logic: Budget (React) + Bourse (Vanilla) + IA + DB V3
+ * INVEST TRACK V5 - FINAL INTEGRATED BUILD
+ * Includes: Unified DB (V3), React Budget, Portfolio View, AI, Auto-Ticker
  */
 
 const { useState, useEffect, useRef } = React;
@@ -10,7 +10,7 @@ const { useState, useEffect, useRef } = React;
 // =================================================================
 const dbService = {
     dbName: 'InvestTrackDB',
-    version: 3, // Version 3 force la mise à jour de la structure chez le client
+    version: 3, 
     db: null,
 
     async init() {
@@ -21,36 +21,16 @@ const dbService = {
             req.onupgradeneeded = (e) => {
                 console.log("DB Upgrade: Création des tables...");
                 const db = e.target.result;
-                
-                // 1. Store Budget
-                if (!db.objectStoreNames.contains('budget')) {
-                    db.createObjectStore('budget', { keyPath: 'id' });
-                }
-                
-                // 2. Store Transactions Bourse
+                if (!db.objectStoreNames.contains('budget')) db.createObjectStore('budget', { keyPath: 'id' });
                 if (!db.objectStoreNames.contains('invest_tx')) {
                     const store = db.createObjectStore('invest_tx', { keyPath: 'id', autoIncrement: true });
-                    if (!store.indexNames.contains('date')) {
-                        store.createIndex('date', 'date', { unique: false });
-                    }
+                    if (!store.indexNames.contains('date')) store.createIndex('date', 'date', { unique: false });
                 }
-                
-                // 3. Store Prix Bourse
-                if (!db.objectStoreNames.contains('invest_prices')) {
-                    db.createObjectStore('invest_prices', { keyPath: 'ticker' });
-                }
+                if (!db.objectStoreNames.contains('invest_prices')) db.createObjectStore('invest_prices', { keyPath: 'ticker' });
             };
 
-            req.onsuccess = (e) => {
-                this.db = e.target.result;
-                console.log("✅ DB Connectée");
-                resolve(this.db);
-            };
-
-            req.onerror = (e) => {
-                console.error("❌ DB Erreur:", e.target.error);
-                reject("DB Error: " + e.target.error);
-            };
+            req.onsuccess = (e) => { this.db = e.target.result; resolve(this.db); };
+            req.onerror = (e) => { console.error("DB Error:", e); reject(e); };
         });
     },
 
@@ -63,20 +43,14 @@ const dbService = {
                 req.onsuccess = () => resolve(req.result || []);
                 req.onerror = () => resolve([]);
             });
-        } catch (e) {
-            console.error(`Erreur lecture ${storeName}`, e);
-            return [];
-        }
+        } catch (e) { return []; }
     },
 
     async add(storeName, item) {
         await this.init();
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(storeName, 'readwrite');
-            
-            // Sécurité ID pour le budget
             if(storeName === 'budget' && !item.id) item.id = Date.now();
-            
             const req = tx.objectStore(storeName).put(item);
             req.onsuccess = () => resolve(item);
             req.onerror = (e) => reject(e);
@@ -101,7 +75,7 @@ const app = {
     currentPrices: {},
     charts: {},
     
-    // MINI BDD : CORRESPONDANCE NOMS -> TICKERS : Modifie cette liste pour ajouter tes propres actifs.
+// MINI BDD : CORRESPONDANCE NOMS -> TICKERS : Modifie cette liste pour ajouter tes propres actifs.
     // Clé (gauche) : Mot clé en minuscule (partie du nom).
     // Valeur (droite) : Le Ticker boursier exact.
     tickerDB: {
@@ -146,11 +120,7 @@ const app = {
         'mercedes': 'MBG',        // Mercedes
     },
     
-    mockDividends: {
-        'Action Vinci': { current: 4.50 }, 'Total Energie': { current: 3.20 },
-        'Accor': { current: 1.10 }, 'Mercedes': { current: 5.30 }, 'Neurones': { current: 1.20 }
-    },
-
+    mockDividends: { 'Action Vinci': { current: 4.50 }, 'Total Energie': { current: 3.20 } },
     tips: ["Diversifiez !", "Intérêts composés = Magie.", "Patience est mère de vertu.", "Achetez la peur."],
 
     init: async function() {
@@ -158,9 +128,11 @@ const app = {
         await this.loadData();
         this.loadDailyTip();
         this.setupAutoFill();
-        // On lance les rendus initiaux sans changer la vue
-        this.renderAssets();
         this.renderTable();
+        // Si on est sur l'onglet assets, on le charge
+        if(!document.getElementById('assets-view').classList.contains('hidden')) {
+            this.renderAssets();
+        }
     },
 
     nav: function(id) {
@@ -185,23 +157,15 @@ const app = {
     loadData: async function() {
         try {
             const txData = await dbService.getAll('invest_tx');
-            if(txData && txData.length > 0) {
-                this.transactions = txData;
-            } else {
-                this.transactions = []; // Pas de seed auto pour éviter les doublons à chaque version
-            }
-
+            this.transactions = (txData && txData.length > 0) ? txData : [];
             const priceData = await dbService.getAll('invest_prices');
             priceData.forEach(p => this.currentPrices[p.ticker] = p.price);
-            
-            console.log(`Bourse: ${this.transactions.length} transactions chargées.`);
         } catch(e) { console.error(e); }
     },
 
     addTransaction: async function(tx) {
         if(!tx.id) tx.id = Date.now() + Math.random();
         await dbService.add('invest_tx', tx);
-        
         const idx = this.transactions.findIndex(t => t.id === tx.id);
         if(idx >= 0) this.transactions[idx] = tx;
         else this.transactions.push(tx);
@@ -237,20 +201,17 @@ const app = {
     calcKPIs: function() {
         const assets = this.getPortfolio();
         let invested = 0, currentVal = 0;
-
         Object.values(assets).forEach(a => {
             if(a.qty < 0.001) return;
             invested += a.invested;
-            const price = this.currentPrices[a.name] || (a.invested / a.qty);
+            const price = this.currentPrices[a.name] || this.currentPrices[a.ticker] || (a.invested / a.qty);
             currentVal += (a.qty * price);
         });
-
         const diff = currentVal - invested;
         const perf = invested > 0 ? (diff / invested) * 100 : 0;
 
-        const kpiTotal = document.getElementById('kpiTotal');
-        if(kpiTotal) {
-            kpiTotal.textContent = invested.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
+        if(document.getElementById('kpiTotal')) {
+            document.getElementById('kpiTotal').textContent = invested.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
             document.getElementById('kpiFuture').textContent = currentVal.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
             const diffEl = document.getElementById('kpiDiff');
             diffEl.textContent = `${diff>=0?'+':''}${diff.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}`;
@@ -268,11 +229,7 @@ const app = {
         if(this.charts.pie) this.charts.pie.destroy();
         const acc = {};
         this.transactions.filter(t=>t.op==='Achat').forEach(t => acc[t.account] = (acc[t.account]||0) + (t.qty*t.price));
-        this.charts.pie = new Chart(ctx, {
-            type: 'doughnut',
-            data: { labels: Object.keys(acc), datasets: [{ data: Object.values(acc), backgroundColor: ['#3b82f6','#8b5cf6','#10b981','#f59e0b'] }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
-        });
+        this.charts.pie = new Chart(ctx, { type: 'doughnut', data: { labels: Object.keys(acc), datasets: [{ data: Object.values(acc), backgroundColor: ['#3b82f6','#8b5cf6','#10b981','#f59e0b'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } } });
     },
 
     renderProjections: function() {
@@ -291,11 +248,7 @@ const app = {
         const data = [cap];
         for(let i=1; i<=years; i++) data.push(data[i-1] * (1 + growthRate));
 
-        this.charts.proj = new Chart(ctx, {
-            type: 'line',
-            data: { labels, datasets: [{ label: `Capital (Taux: ${(growthRate*100).toFixed(1)}%)`, data, borderColor: '#9333ea', backgroundColor: 'rgba(147, 51, 234, 0.1)', fill: true }] },
-            options: { maintainAspectRatio: false }
-        });
+        this.charts.proj = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ label: `Capital (Taux: ${(growthRate*100).toFixed(1)}%)`, data, borderColor: '#9333ea', backgroundColor: 'rgba(147, 51, 234, 0.1)', fill: true }] }, options: { maintainAspectRatio: false } });
         this.renderYearlyBar();
         this.renderFrequency();
     },
@@ -305,15 +258,8 @@ const app = {
         if(!ctx) return;
         if(this.charts.bar) this.charts.bar.destroy();
         const yData = {};
-        this.transactions.filter(t=>t.op==='Achat').forEach(t => {
-            const y = t.date.split('-')[0];
-            yData[y] = (yData[y]||0) + (t.qty*t.price);
-        });
-        this.charts.bar = new Chart(ctx, {
-            type: 'bar',
-            data: { labels: Object.keys(yData).sort(), datasets: [{ label:'Investi', data:Object.values(yData), backgroundColor:'#10b981' }] },
-            options: { maintainAspectRatio: false }
-        });
+        this.transactions.filter(t=>t.op==='Achat').forEach(t => { const y = t.date.split('-')[0]; yData[y] = (yData[y]||0) + (t.qty*t.price); });
+        this.charts.bar = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(yData).sort(), datasets: [{ label:'Investi', data:Object.values(yData), backgroundColor:'#10b981' }] }, options: { maintainAspectRatio: false } });
     },
 
     renderFrequency: function() {
@@ -323,50 +269,35 @@ const app = {
         let count = 0;
         const sorted = [...this.transactions].sort((a,b)=>new Date(a.date)-new Date(b.date));
         const data = sorted.map(t => ++count);
-        const labels = sorted.map(t => t.date);
-        this.charts.freq = new Chart(ctx, {
-            type: 'line',
-            data: { labels, datasets: [{ label:'Opérations', data, borderColor:'#6366f1', pointRadius:0 }] },
-            options: { maintainAspectRatio: false, scales: { x: { display: false } } }
-        });
+        this.charts.freq = new Chart(ctx, { type: 'line', data: { labels: sorted.map(t=>t.date), datasets: [{ label:'Opérations', data, borderColor:'#6366f1', pointRadius:0 }] }, options: { maintainAspectRatio: false, scales: { x: { display: false } } } });
     },
 
+    // --- NOUVELLE FONCTION RENDER ASSETS (PORTEFEUILLE) ---
     renderAssets: function() {
         const grid = document.getElementById('assetsGrid');
         if(!grid) return;
-        grid.innerHTML = ''; // On vide la grille
-        
-        const assets = this.getPortfolio(); // Récupère les positions groupées
-        const sortedAssets = Object.values(assets).sort((a,b) => b.invested - a.invested); // Tri par montant investi
+        grid.innerHTML = ''; 
+        const assets = this.getPortfolio();
+        const sortedAssets = Object.values(assets).sort((a,b) => b.invested - a.invested);
 
         if (sortedAssets.length === 0) {
-            grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10">Aucune position active. Ajoutez des transactions "Achat".</div>';
+            grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10">Aucune position. Ajoutez des transactions "Achat".</div>';
             return;
         }
 
         sortedAssets.forEach(a => {
-            // Si la quantité est proche de 0 (position vendue), on n'affiche pas
             if(a.qty < 0.001) return;
-
-            // Calculs
-            const pru = a.invested / a.qty; // Prix de Revient Unitaire
-            const currentPrice = this.currentPrices[a.name] || this.currentPrices[a.ticker] || pru; // Prix actuel ou PRU par défaut
-            const totalValue = a.qty * currentPrice; // Valeur totale actuelle
-            
-            // Calcul Plus/Moins Value
+            const pru = a.invested / a.qty;
+            const currentPrice = this.currentPrices[a.name] || this.currentPrices[a.ticker] || pru;
+            const totalValue = a.qty * currentPrice;
             const gain = totalValue - a.invested;
             const perf = ((gain) / a.invested) * 100;
-            
-            // Gestion des couleurs
             const isPos = gain >= 0;
             const colorClass = isPos ? 'text-green-600' : 'text-red-500';
-            const bgClass = isPos ? 'bg-green-50' : 'bg-red-50';
             const borderClass = isPos ? 'border-green-200' : 'border-red-200';
 
-            // Injection HTML de la carte
             grid.innerHTML += `
                 <div class="bg-white rounded-xl shadow-sm border ${borderClass} overflow-hidden flex flex-col">
-                    
                     <div class="p-4 border-b border-gray-100 flex justify-between items-start bg-slate-50">
                         <div class="overflow-hidden">
                             <h3 class="font-bold text-gray-800 text-lg truncate" title="${a.name}">${a.name}</h3>
@@ -377,39 +308,20 @@ const app = {
                              <div class="font-mono font-bold text-gray-700">${parseFloat(a.qty).toFixed(4).replace(/\.?0+$/,'')}</div>
                         </div>
                     </div>
-
                     <div class="p-4 space-y-3">
-                        
                         <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
-                            <div class="text-left">
-                                <span class="block text-[10px] text-gray-400 uppercase">PRU (Achat)</span>
-                                <span class="font-mono text-sm text-gray-600">${pru.toFixed(2)} €</span>
-                            </div>
+                            <div class="text-left"><span class="block text-[10px] text-gray-400 uppercase">PRU</span><span class="font-mono text-sm text-gray-600">${pru.toFixed(2)} €</span></div>
                             <div class="text-right">
                                 <label class="block text-[10px] text-blue-500 uppercase font-bold mb-1"><i class="fa-solid fa-pen-to-square"></i> Prix Actuel</label>
-                                <input 
-                                    type="number" 
-                                    step="0.01" 
-                                    value="${currentPrice.toFixed(2)}" 
-                                    onchange="app.updatePrice('${a.name}', this.value, '${a.ticker}')" 
-                                    class="w-24 text-right font-bold text-gray-800 border-b-2 border-blue-200 focus:border-blue-500 outline-none bg-transparent transition"
-                                >
+                                <input type="number" step="0.01" value="${currentPrice.toFixed(2)}" onchange="app.updatePrice('${a.name}', this.value, '${a.ticker}')" class="w-24 text-right font-bold text-gray-800 border-b-2 border-blue-200 focus:border-blue-500 outline-none bg-transparent">
                             </div>
                         </div>
-
                         <div class="flex justify-between items-end pt-2">
-                            <div>
-                                <span class="text-xs text-gray-400 block">Valeur Totale</span>
-                                <div class="font-bold text-xl text-gray-800">${totalValue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</div>
-                            </div>
+                            <div><span class="text-xs text-gray-400 block">Total</span><div class="font-bold text-xl text-gray-800">${totalValue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</div></div>
                             <div class="text-right">
-                                <span class="text-xs text-gray-400 block">Rendement</span>
-                                <span class="font-bold text-lg ${colorClass}">
-                                    ${isPos ? '+' : ''}${perf.toFixed(2)}%
-                                </span>
-                                <div class="text-[10px] ${colorClass} opacity-75">
-                                    (${isPos ? '+' : ''}${gain.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})})
-                                </div>
+                                <span class="text-xs text-gray-400 block">Perf</span>
+                                <span class="font-bold text-lg ${colorClass}">${isPos?'+':''}${perf.toFixed(2)}%</span>
+                                <div class="text-[10px] ${colorClass} opacity-75">(${isPos?'+':''}${gain.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})})</div>
                             </div>
                         </div>
                     </div>
@@ -429,7 +341,6 @@ const app = {
         sorted.forEach(tx => {
             const total = tx.op==='Dividende' ? tx.price : (tx.qty*tx.price);
             const badge = tx.op==='Achat'?'bg-blue-100 text-blue-800':(tx.op==='Vente'?'bg-red-100 text-red-800':'bg-emerald-100 text-emerald-800');
-            
             tbody.innerHTML += `
                 <tr class="bg-white border-b hover:bg-gray-50 transition">
                     <td class="px-4 py-3 font-mono text-xs">${tx.date}</td>
@@ -453,7 +364,6 @@ const app = {
         container.innerHTML = '';
         const assets = this.getPortfolio();
         let found = false;
-
         Object.values(assets).forEach(a => {
             if(a.qty < 0.01) return;
             const info = this.mockDividends[a.name] || { current: 0 };
@@ -462,24 +372,16 @@ const app = {
                 const total = a.qty * info.current;
                 const col = this.strColor(a.name, 95, 90);
                 const border = this.strColor(a.name, 60, 50);
-                container.innerHTML += `
-                    <div class="bg-white rounded-xl shadow-sm border p-4" style="background:${col}; border-color:${border}">
-                        <div class="flex justify-between font-bold" style="color:${border}"><span>${a.name}</span><i class="fa-solid fa-coins"></i></div>
-                        <div class="mt-4 flex justify-between items-end">
-                            <div><p class="text-xs text-gray-500">Revenu Est.</p><p class="text-xl font-bold text-emerald-700">${total.toFixed(2)} €</p></div>
-                            <div class="text-right"><p class="text-xs text-gray-500">Unit.</p><p class="font-mono">${info.current} €</p></div>
-                        </div>
-                    </div>`;
+                container.innerHTML += `<div class="bg-white rounded-xl shadow-sm border p-4" style="background:${col}; border-color:${border}"><div class="flex justify-between font-bold" style="color:${border}"><span>${a.name}</span><i class="fa-solid fa-coins"></i></div><div class="mt-4 flex justify-between items-end"><div><p class="text-xs text-gray-500">Revenu Est.</p><p class="text-xl font-bold text-emerald-700">${total.toFixed(2)} €</p></div><div class="text-right"><p class="text-xs text-gray-500">Unit.</p><p class="font-mono">${info.current} €</p></div></div></div>`;
             }
         });
-        if(!found && document.getElementById('noDividends')) 
-            document.getElementById('noDividends').classList.remove('hidden');
+        if(!found) document.getElementById('noDividends')?.classList.remove('hidden');
     },
 
     openModal: function(mode, id=null) {
         document.getElementById('modalForm').classList.remove('hidden');
         document.getElementById('editIndex').value = id !== null ? id : '';
-        document.getElementById('modalTitle').textContent = mode==='new' ? 'Nouvelle Transaction' : 'Modifier Transaction';
+        document.getElementById('modalTitle').textContent = mode==='new' ? 'Nouvelle Transaction' : 'Modifier';
         if(mode==='new') {
             document.getElementById('fDate').value = new Date().toISOString().split('T')[0];
             ['fName','fTicker','fAccount','fSector','fQty','fPrice'].forEach(id => document.getElementById(id).value = '');
@@ -525,6 +427,7 @@ const app = {
         } 
     },
     
+    // --- IMPORT AUTO-FILL TICKER ---
     handleImport: async function(e) {
         const r = new FileReader();
         r.onload = async ev => {
@@ -532,25 +435,17 @@ const app = {
                 const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
                 const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
                 let count = 0;
-                
                 for(const row of json) {
                     let d = row['Date']||row['Date_Entrée'];
                     if(typeof d==='number') d = new Date(Math.round((d-25569)*86400*1000)).toISOString().split('T')[0];
                     
-                    // --- LOGIQUE DE DÉTECTION TICKER ---
-                    let detectedTicker = row['Ticker'] || ''; // Priorité au Excel
-                    
+                    let detectedTicker = row['Ticker'] || '';
                     if (!detectedTicker) {
                         const lowerName = (row['Nom actif'] || '').toLowerCase();
-                        // Recherche dans notre BDD interne
                         for (const [key, ticker] of Object.entries(this.tickerDB)) {
-                            if (lowerName.includes(key)) {
-                                detectedTicker = ticker;
-                                break;
-                            }
+                            if (lowerName.includes(key)) { detectedTicker = ticker; break; }
                         }
                     }
-                    // ------------------------------------
 
                     const tx = {
                         date: d || new Date().toISOString().split('T')[0],
@@ -559,9 +454,8 @@ const app = {
                         qty: parseFloat(row['Quantité']) || 0,
                         price: parseFloat(row['Prix unitaire']) || 0,
                         account: row['Compte'] || '',
-                        ticker: detectedTicker // Utilisation du ticker détecté
+                        ticker: detectedTicker
                     };
-                    
                     if(tx.qty > 0) { await this.addTransaction(tx); count++; }
                 }
                 this.toast(`${count} importés`); this.renderTable();
@@ -577,29 +471,22 @@ const app = {
         XLSX.utils.book_append_sheet(wb, ws, "Transactions");
         XLSX.writeFile(wb, "InvestTrack_Export.xlsx");
     },
+    
+    // --- AUTO-FILL MANUEL ---
     setupAutoFill: function() {
-        const nameInput = document.getElementById('fName');
-        if(nameInput) {
-            // Événement "blur" = quand on clique en dehors du champ
-            nameInput.addEventListener('blur', (e) => {
+        const el = document.getElementById('fName');
+        if(el) {
+            el.addEventListener('blur', (e) => {
                 const val = e.target.value.toLowerCase().trim();
                 const tickerInput = document.getElementById('fTicker');
-                
-                // On ne remplace pas si l'utilisateur a déjà mis un ticker manuellement
                 if(tickerInput.value !== '') return;
-
-                // On cherche dans la BDD
-                for(const [key, ticker] of Object.entries(this.tickerDB)) {
-                    // Si le nom saisi contient le mot clé (ex: "Action Total" contient "total")
-                    if(val.includes(key)) { 
-                        tickerInput.value = ticker; 
-                        this.toast(`Ticker trouvé : ${ticker}`);
-                        break; 
-                    }
+                for(const [k,t] of Object.entries(this.tickerDB)) { 
+                    if(val.includes(k)) { tickerInput.value=t; this.toast(`Ticker: ${t}`); break; }
                 }
             });
         }
     },
+
     searchTicker: function() { const n = document.getElementById('fName').value; if(n) window.open(`https://www.google.com/search?q=ticker+${encodeURIComponent(n)}`, '_blank'); },
     strColor: function(s,l,d) { let h=0; for(let i=0;i<s.length;i++)h=s.charCodeAt(i)+((h<<5)-h); return `hsl(${h%360},${l}%,${d}%)`; },
     loadDailyTip: function() { document.getElementById('dailyTip').textContent = `"${this.tips[new Date().getDate()%this.tips.length]}"`; },
@@ -607,7 +494,7 @@ const app = {
 };
 
 // =================================================================
-// 2. BUDGET SCAN APP (REACT + CHARTS + ROBUST DB)
+// 2. BUDGET SCAN APP (REACT)
 // =================================================================
 const CATEGORIES = {
     'Alimentation': ['carrefour', 'leclerc', 'auchan', 'lidl', 'courses'],
@@ -622,17 +509,14 @@ const BudgetApp = () => {
     const [transactions, setTransactions] = useState([]);
     const [view, setView] = useState('dashboard'); 
     const [filterYear, setFilterYear] = useState('Tout'); 
-    
     const barRef = useRef(null);
     const pieRef = useRef(null);
 
-    // Chargement DB
     useEffect(() => {
         const load = async () => {
             try {
                 await dbService.init();
                 const data = await dbService.getAll('budget');
-                // Protection contre les dates nulles
                 const safeData = (data || []).map(t => ({
                     ...t,
                     date: t.date || new Date().toISOString().split('T')[0],
@@ -641,45 +525,31 @@ const BudgetApp = () => {
                     category: t.category || 'Autre'
                 }));
                 setTransactions(safeData.sort((a,b) => new Date(b.date) - new Date(a.date)));
-            } catch (e) {
-                console.error("Erreur chargement budget:", e);
-            }
+            } catch (e) { console.error("Err Budget Load", e); }
         };
         load();
         window.addEventListener('budget-update', load);
         return () => window.removeEventListener('budget-update', load);
     }, []);
 
-    // Calculs Dashboard
     const getStats = () => {
         const now = new Date();
         const currentM = now.getMonth(), currentY = now.getFullYear();
-        
         const currentTx = transactions.filter(t => { 
             const d = new Date(t.date); 
             return d.getMonth()===currentM && d.getFullYear()===currentY; 
         });
-
         const merchants = {};
         currentTx.forEach(t => { if(t.amount < 0) merchants[t.description] = (merchants[t.description]||0) + Math.abs(t.amount); });
         const top5 = Object.entries(merchants).sort((a,b) => b[1]-a[1]).slice(0,5);
-
         const cats = {};
         currentTx.forEach(t => { if(t.amount < 0) cats[t.category] = (cats[t.category]||0) + Math.abs(t.amount); });
-
         const sixM = {};
         for(let i=5; i>=0; i--) { const d = new Date(now.getFullYear(), now.getMonth()-i, 1); sixM[`${d.getMonth()+1}/${d.getFullYear()}`] = 0; }
-        transactions.forEach(t => { 
-            if(t.amount < 0) { 
-                const d = new Date(t.date); 
-                const k = `${d.getMonth()+1}/${d.getFullYear()}`; 
-                if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount); 
-            } 
-        });
+        transactions.forEach(t => { if(t.amount < 0) { const d = new Date(t.date); const k = `${d.getMonth()+1}/${d.getFullYear()}`; if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount); } });
         return { currentTx, top5, cats, sixM };
     };
 
-    // Gestion Graphiques
     useEffect(() => {
         if(view !== 'dashboard') return;
         const { cats, sixM } = getStats();
@@ -698,12 +568,10 @@ const BudgetApp = () => {
         return () => clearTimeout(timer);
     }, [transactions, view]);
 
-    // Actions
     const addManual = async () => { await dbService.add('budget', { id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Dépense manuelle", amount: -10, category: "Autre" }); window.dispatchEvent(new Event('budget-update')); };
     const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add('budget', {...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
     const deleteTx = async (id) => { if(confirm("Supprimer ?")) { await dbService.delete('budget', id); window.dispatchEvent(new Event('budget-update')); } };
     
-    // Filtres
     const availableYears = React.useMemo(() => {
         try {
             const years = new Set(transactions.map(t => (t.date ? String(t.date).substring(0,4) : '2024')));
@@ -727,7 +595,6 @@ const BudgetApp = () => {
                 </div>
                 <button onClick={addManual} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">+ Manuel</button>
             </div>
-
             <div className="flex-1 overflow-y-auto px-4 pb-24" style={{ height: 'calc(100vh - 180px)' }}>
                 {view === 'dashboard' && (
                     <div className="space-y-6 animate-fade-in pb-10">
@@ -758,13 +625,8 @@ const BudgetApp = () => {
                             ))}
                         </div>
                         <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between">
-                                <span>{filterYear === 'Tout' ? 'Tout' : filterYear}</span>
-                                <span>{filteredList.length} lignes</span>
-                            </h3>
-                            {filteredList.length === 0 ? (
-                                <div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée.</p></div>
-                            ) : (
+                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between"><span>{filterYear}</span><span>{filteredList.length} lignes</span></h3>
+                            {filteredList.length === 0 ? (<div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée.</p></div>) : (
                                 filteredList.map(t => (
                                     <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2">
                                         <div className="flex justify-between items-center gap-2">
@@ -774,9 +636,7 @@ const BudgetApp = () => {
                                         <div className="flex justify-between items-center text-xs">
                                             <div className="flex gap-2 items-center flex-wrap">
                                                 <input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-gray-400 bg-transparent border-none p-0" />
-                                                <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 outline-none">
-                                                    {Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}
-                                                </select>
+                                                <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 outline-none">{Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}</select>
                                             </div>
                                             <button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500 px-2"><i className="fa-solid fa-trash"></i></button>
                                         </div>
@@ -792,259 +652,127 @@ const BudgetApp = () => {
 };
 
 // =================================================================
-// 3. SMART PDF/IMAGE IMPORTER (MODULE IA COMPLET)
+// 3. IA MODULE (PDF/IMG)
 // =================================================================
 const pdfImporter = {
-    apiKey: '',
-    fileBase64: '',
-    currentMimeType: '',
-    extracted: [],
-    usableModels: [],
-
+    apiKey: '', fileBase64: '', currentMimeType: '', extracted: [], usableModels: [],
     open: function() { document.getElementById('pdf-modal-overlay').classList.remove('hidden'); },
     close: function() { document.getElementById('pdf-modal-overlay').classList.add('hidden'); },
-
     log: function(msg, type='info') {
         const c = document.getElementById('ai-console');
         if(!c) return;
         const color = type==='success'?'text-green-400':(type==='error'?'text-red-400':(type==='warn'?'text-yellow-400':'text-slate-300'));
-        c.innerHTML += `<div class="mb-1 ${color}">> ${msg}</div>`;
-        c.parentElement.scrollTop = c.parentElement.scrollHeight;
+        c.innerHTML += `<div class="mb-1 ${color}">> ${msg}</div>`; c.parentElement.scrollTop = c.parentElement.scrollHeight;
     },
-
     verifyKey: async function() {
         const key = document.getElementById('gemini-key').value.trim();
-        const btn = document.getElementById('btn-verify-key');
-        const status = document.getElementById('gemini-status');
-        
         if(!key) return;
-        btn.innerText = '...'; btn.disabled = true;
-
         try {
             const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
             const data = await r.json();
             if(!r.ok) throw new Error(data.error?.message || 'Clé invalide');
-
-            const models = (data.models || []).filter(m => m.supportedGenerationMethods?.includes('generateContent'));
-            if(models.length === 0) throw new Error("Aucun modèle compatible.");
-
-            models.sort((a,b) => {
-                const priority = n => { if(n.includes('flash')) return 10; if(n.includes('gemini-1.5-pro')) return 8; return 0; };
-                return priority(b.name) - priority(a.name);
-            });
-
-            this.usableModels = models.map(m => ({ id: m.name.replace(/^models\//,''), name: m.displayName||m.name }));
+            this.usableModels = (data.models || []).filter(m => m.supportedGenerationMethods?.includes('generateContent'));
             this.apiKey = key;
-
-            status.innerHTML = `<span class="text-green-600 font-bold">✅ Prêt (${this.usableModels[0].name})</span>`;
+            document.getElementById('gemini-status').innerHTML = `<span class="text-green-600 font-bold">✅ Prêt</span>`;
             document.getElementById('ai-step-2').classList.remove('hidden');
-        } catch(e) {
-            status.innerHTML = `<span class="text-red-600 font-bold">❌ Erreur: ${e.message}</span>`;
-        } finally {
-            btn.innerText = 'Vérifier'; btn.disabled = false;
-        }
+        } catch(e) { document.getElementById('gemini-status').innerHTML = `<span class="text-red-600 font-bold">❌ ${e.message}</span>`; }
     },
-
     handleFile: function(e) {
         const file = e.target.files[0];
         if(!file) return;
-        
-        const valid = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
-        if(!valid.includes(file.type)) { alert("Format invalide. PDF ou Images seulement."); return; }
-
         this.currentMimeType = file.type;
         document.getElementById('ai-filename').innerText = file.name;
         document.getElementById('ai-file-info').classList.remove('hidden');
-
         const reader = new FileReader();
         reader.onload = (evt) => this.fileBase64 = evt.target.result.split(',')[1];
         reader.readAsDataURL(file);
     },
-
     processAuto: async function() {
         if(!this.apiKey || !this.fileBase64) return;
-        
         document.getElementById('ai-step-3').classList.add('hidden');
         document.getElementById('ai-logs-container').classList.remove('hidden');
-        document.getElementById('ai-console').innerHTML = '';
-        this.log("Démarrage de l'analyse IA...");
-
+        this.log("Analyse IA...");
         const prompt = `Extrais TOUTES les transactions. JSON STRICT Array: [{"date":"YYYY-MM-DD","description":"Nom","amount":-10.00,"category":"Autre"}]. IMPORTANT: Les dépenses doivent avoir un montant NÉGATIF.`;
-        let success = false;
-
-        for(const model of this.usableModels) {
-            this.log(`Tentative avec ${model.name}...`);
-            try {
-                const payload = {
-                    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: this.currentMimeType, data: this.fileBase64 } }] }],
-                    generationConfig: { temperature: 0.1, response_mime_type: "application/json" },
-                    safetySettings: [
-                        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-                    ]
-                };
-
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${this.apiKey}`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
-                });
-
-                if(!res.ok) {
-                    if(res.status === 429) { this.log("Quota dépassé (429). Suivant...", 'warn'); continue; }
-                    if(res.status === 503) { this.log("Surchargé (503). Suivant...", 'warn'); continue; }
-                    throw new Error(res.statusText);
-                }
-
-                const d = await res.json();
-                if(!d.candidates?.[0]?.content) throw new Error("Réponse vide/bloquée.");
-
-                let raw = d.candidates[0].content.parts[0].text;
-                const match = raw.match(/\[[\s\S]*\]/);
-                if(match) raw = match[0];
-                else raw = raw.replace(/```json/g,'').replace(/```/g,'').trim();
-
-                let json = JSON.parse(raw);
-                if(!Array.isArray(json)) json = json.data || json.table || [json];
-
-                if(json.length > 0) {
-                    this.extracted = json;
-                    this.log(`Succès ! ${json.length} éléments trouvés.`, 'success');
-                    this.renderPreview();
-                    success = true;
-                    break; 
-                } else {
-                    this.log("Aucune donnée trouvée.", 'warn');
-                }
-            } catch(e) {
-                this.log(`Erreur: ${e.message}`, 'error');
-            }
-        }
-
-        if(!success) alert("Impossible d'extraire les données.");
+        try {
+            const model = this.usableModels[0] || {id: 'gemini-1.5-flash'};
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${this.apiKey}`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: this.currentMimeType, data: this.fileBase64 } }] }] })
+            });
+            const d = await res.json();
+            let raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const match = raw.match(/\[[\s\S]*\]/);
+            if(match) raw = match[0];
+            const json = JSON.parse(raw);
+            this.extracted = Array.isArray(json) ? json : [json];
+            this.log(`Succès ! ${this.extracted.length} lignes.`, 'success');
+            this.renderPreview();
+        } catch(e) { this.log(`Erreur: ${e.message}`, 'error'); }
     },
-
     renderPreview: function() {
         const t = document.getElementById('ai-preview-table');
         document.getElementById('ai-count').innerText = `${this.extracted.length} lignes`;
-        t.innerHTML = this.extracted.slice(0,10).map(r => 
-            `<tr class="border-b"><td class="p-2 text-xs">${r.date}</td><td class="p-2 text-xs truncate max-w-[100px]">${r.description}</td><td class="p-2 text-xs text-right font-bold">${r.amount}</td></tr>`
-        ).join('') + (this.extracted.length>10 ? '<tr><td colspan="3" class="p-2 text-center italic text-xs">... et autres</td></tr>' : '');
+        t.innerHTML = this.extracted.slice(0,10).map(r => `<tr class="border-b"><td class="p-2 text-xs">${r.date}</td><td class="p-2 text-xs truncate max-w-[100px]">${r.description}</td><td class="p-2 text-xs text-right font-bold">${r.amount}</td></tr>`).join('');
         document.getElementById('ai-step-3').classList.remove('hidden');
     },
-
     importToBudget: async function() {
-        if(!this.extracted.length) return;
         await dbService.init();
         let count = 0;
         for(const item of this.extracted) {
-            await dbService.add('budget', {
-                id: Date.now() + Math.random(),
-                date: item.date || new Date().toISOString().split('T')[0],
-                description: item.description || 'Import IA',
-                amount: parseFloat(item.amount) || 0,
-                category: item.category || 'Import'
-            });
+            await dbService.add('budget', { id: Date.now()+Math.random(), date: item.date||new Date().toISOString().split('T')[0], description: item.description||'IA', amount: parseFloat(item.amount)||0, category: item.category||'Import' });
             count++;
         }
-        this.close();
-        window.dispatchEvent(new Event('budget-update'));
-        alert(`${count} transactions importées !`);
+        this.close(); window.dispatchEvent(new Event('budget-update')); alert(`${count} importés !`);
     }
 };
 
 // =================================================================
-// 4. INFO MODULE (MODULE COMPLET)
+// 4. INFO MODULE
 // =================================================================
 const infoModule = {
     config: { username: 'antoto2021', repo: 'Suivi-investissement' },
-    
-    init: async function() { 
-        this.renderLocalInfo(); 
-        setTimeout(() => this.checkGitHub(true), 3000); 
-    },
-    
-    openModal: function() { 
-        document.getElementById('info-modal-overlay').classList.remove('hidden'); 
-        this.renderLocalInfo(); 
-        this.checkGitHub(false); 
-    },
-    
-    closeModal: function() { 
-        document.getElementById('info-modal-overlay').classList.add('hidden'); 
-    },
-    
-    renderLocalInfo: function() { 
-        document.getElementById('info-local-v').innerText = localStorage.getItem('app_version_hash')?.substring(0,7) || 'Init'; 
-    },
-    
+    init: async function() { this.renderLocalInfo(); setTimeout(() => this.checkGitHub(true), 3000); },
+    openModal: function() { document.getElementById('info-modal-overlay').classList.remove('hidden'); this.renderLocalInfo(); this.checkGitHub(false); },
+    closeModal: function() { document.getElementById('info-modal-overlay').classList.add('hidden'); },
+    renderLocalInfo: function() { document.getElementById('info-local-v').innerText = localStorage.getItem('app_version_hash')?.substring(0,7) || 'Init'; },
     checkGitHub: function(bg=false) {
         const btn = document.querySelector('#info-remote-v');
         if(!bg && btn) btn.innerText = '...';
         return fetch(`https://api.github.com/repos/${this.config.username}/${this.config.repo}/commits?per_page=1`)
-            .then(r => r.json())
-            .then(d => {
+            .then(r => r.json()).then(d => {
                 if(d && d[0]) {
                     const sha = d[0].sha;
                     if(document.getElementById('info-remote-v')) document.getElementById('info-remote-v').innerText = sha.substring(0,7);
-                    
-                    const local = localStorage.getItem('app_version_hash');
-                    if(local && local !== sha) { 
-                        document.getElementById('navUpdateDot')?.classList.remove('hidden'); 
-                        document.getElementById('refreshUpdateDot')?.classList.remove('hidden'); 
-                    }
-                    if(!local) localStorage.setItem('app_version_hash', sha);
+                    if(localStorage.getItem('app_version_hash') !== sha) { document.getElementById('navUpdateDot')?.classList.remove('hidden'); document.getElementById('refreshUpdateDot')?.classList.remove('hidden'); }
                     return sha;
                 }
-            })
-            .catch(e => { if(!bg && btn) btn.innerText = 'Err'; });
+            }).catch(e => { if(!bg && btn) btn.innerText = 'Err'; });
     },
-    
     forceUpdate: function() {
         const btn = document.getElementById('refreshBtn');
         btn.classList.add('spin-once');
-        this.checkGitHub().then(sha => { 
-            if(sha) localStorage.setItem('app_version_hash', sha); 
-            setTimeout(() => window.location.reload(), 800); 
-        });
+        this.checkGitHub().then(sha => { if(sha) localStorage.setItem('app_version_hash', sha); setTimeout(() => window.location.reload(), 800); });
     }
 };
 
 // =================================================================
-// 5. BOOTSTRAP (INITIALISATION IMMÉDIATE)
+// 5. BOOTSTRAP (INITIALISATION)
 // =================================================================
-document.addEventListener('DOMContentLoaded', () => {
-   // Fallback si DOMContentLoaded fonctionne
-});
-
-// Initialisation Directe (Pour contourner Babel latency)
 const bootstrap = () => {
-    console.log("Bootstrap Application Complete...");
-    
-    // Globals
+    console.log("Bootstrap...");
     window.app = app;
     window.infoModule = infoModule;
     window.pdfImporter = pdfImporter;
     
-    // Init Modules Vanilla
     app.init();
     infoModule.init();
     
-    // Init React
     const rootEl = document.getElementById('budget-root');
     if(rootEl) {
-        try {
-            const root = ReactDOM.createRoot(rootEl);
-            root.render(<BudgetApp />);
-            console.log("React monté.");
-        } catch(e) {
-            console.error("Erreur React:", e);
-        }
+        try { ReactDOM.createRoot(rootEl).render(<BudgetApp />); } 
+        catch(e) { console.error("React Error", e); }
     }
-    
-    // Icons
     if(window.lucide) lucide.createIcons();
 };
 
-// Appel immédiat
 bootstrap();
