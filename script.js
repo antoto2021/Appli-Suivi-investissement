@@ -623,7 +623,7 @@ const app = {
 };
 
 // =================================================================
-// 2. BUDGET SCAN APP (REACT)
+// 2. BUDGET SCAN APP (REACT) - VERSION AVEC FORMULAIRE MANUEL
 // =================================================================
 const CATEGORIES = {
     'Alimentation': ['carrefour', 'leclerc', 'auchan', 'lidl', 'courses'],
@@ -639,6 +639,10 @@ const BudgetApp = () => {
     const [view, setView] = useState('dashboard'); 
     const [filterYear, setFilterYear] = useState('Tout'); 
     
+    // NOUVEAU : États pour la modale d'ajout
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [newTx, setNewTx] = useState({ description: '', amount: '', date: '', category: 'Autre' });
+
     const barRef = useRef(null);
     const pieRef = useRef(null);
 
@@ -648,7 +652,6 @@ const BudgetApp = () => {
             try {
                 await dbService.init();
                 const data = await dbService.getAll('budget');
-                // Sécurisation des données
                 const safeData = (data || []).map(t => ({
                     ...t,
                     date: t.date || new Date().toISOString().split('T')[0],
@@ -657,9 +660,7 @@ const BudgetApp = () => {
                     category: t.category || 'Autre'
                 }));
                 setTransactions(safeData.sort((a,b) => new Date(b.date) - new Date(a.date)));
-            } catch (e) {
-                console.error("Erreur chargement budget:", e);
-            }
+            } catch (e) { console.error("Err Budget Load", e); }
         };
         load();
         window.addEventListener('budget-update', load);
@@ -670,28 +671,18 @@ const BudgetApp = () => {
     const getStats = () => {
         const now = new Date();
         const currentM = now.getMonth(), currentY = now.getFullYear();
-        
         const currentTx = transactions.filter(t => { 
             const d = new Date(t.date); 
             return d.getMonth()===currentM && d.getFullYear()===currentY; 
         });
-
         const merchants = {};
         currentTx.forEach(t => { if(t.amount < 0) merchants[t.description] = (merchants[t.description]||0) + Math.abs(t.amount); });
         const top5 = Object.entries(merchants).sort((a,b) => b[1]-a[1]).slice(0,5);
-
         const cats = {};
         currentTx.forEach(t => { if(t.amount < 0) cats[t.category] = (cats[t.category]||0) + Math.abs(t.amount); });
-
         const sixM = {};
         for(let i=5; i>=0; i--) { const d = new Date(now.getFullYear(), now.getMonth()-i, 1); sixM[`${d.getMonth()+1}/${d.getFullYear()}`] = 0; }
-        transactions.forEach(t => { 
-            if(t.amount < 0) { 
-                const d = new Date(t.date); 
-                const k = `${d.getMonth()+1}/${d.getFullYear()}`; 
-                if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount); 
-            } 
-        });
+        transactions.forEach(t => { if(t.amount < 0) { const d = new Date(t.date); const k = `${d.getMonth()+1}/${d.getFullYear()}`; if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount); } });
         return { currentTx, top5, cats, sixM };
     };
 
@@ -699,7 +690,6 @@ const BudgetApp = () => {
     useEffect(() => {
         if(view !== 'dashboard') return;
         const { cats, sixM } = getStats();
-        
         const timer = setTimeout(() => {
             if(pieRef.current) {
                 if(window.bPie) window.bPie.destroy();
@@ -715,8 +705,36 @@ const BudgetApp = () => {
         return () => clearTimeout(timer);
     }, [transactions, view]);
 
-    // Actions
-    const addManual = async () => { await dbService.add('budget', { id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Dépense manuelle", amount: -10, category: "Autre" }); window.dispatchEvent(new Event('budget-update')); };
+    // --- GESTION DES ACTIONS ---
+
+    // 1. Ouvrir le formulaire (remplace l'ajout immédiat)
+    const openAddModal = () => {
+        setNewTx({ 
+            description: '', 
+            amount: '', 
+            date: new Date().toISOString().split('T')[0], 
+            category: 'Autre' 
+        });
+        setIsModalOpen(true);
+    };
+
+    // 2. Sauvegarder la nouvelle dépense
+    const saveManual = async (e) => {
+        e.preventDefault();
+        if(!newTx.description || !newTx.amount) return;
+
+        await dbService.add('budget', { 
+            id: Date.now(), 
+            date: newTx.date, 
+            description: newTx.description, 
+            amount: -Math.abs(parseFloat(newTx.amount)), // Force en négatif pour une dépense
+            category: newTx.category 
+        });
+        
+        setIsModalOpen(false);
+        window.dispatchEvent(new Event('budget-update'));
+    };
+
     const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add('budget', {...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
     const deleteTx = async (id) => { if(confirm("Supprimer ?")) { await dbService.delete('budget', id); window.dispatchEvent(new Event('budget-update')); } };
     
@@ -737,14 +755,17 @@ const BudgetApp = () => {
 
     return (
         <div className="flex flex-col h-full bg-slate-50 relative">
+            {/* Header */}
             <div className="flex justify-between items-center p-4 bg-white shadow-sm mb-2 sticky top-0 z-20">
                 <div className="flex gap-2">
                     <button onClick={()=>setView('dashboard')} className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${view==='dashboard'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>Dashboard</button>
                     <button onClick={()=>setView('list')} className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${view==='list'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>Historique</button>
                 </div>
-                <button onClick={addManual} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">+ Manuel</button>
+                {/* Bouton modifié pour ouvrir la modale */}
+                <button onClick={openAddModal} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">+ Manuel</button>
             </div>
 
+            {/* Contenu */}
             <div className="flex-1 overflow-y-auto px-4 pb-24" style={{ height: 'calc(100vh - 180px)' }}>
                 
                 {view === 'dashboard' && (
@@ -806,6 +827,70 @@ const BudgetApp = () => {
                     </div>
                 )}
             </div>
+
+            {/* MODALE D'AJOUT MANUEL (REACT) */}
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-fade-in">
+                        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                            <h3 className="font-bold text-gray-800">Ajout Manuel</h3>
+                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                        <form onSubmit={saveManual} className="p-5 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    placeholder="Ex: Courses, Resto..." 
+                                    className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    value={newTx.description}
+                                    onChange={e => setNewTx({...newTx, description: e.target.value})}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Montant (€)</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        required
+                                        placeholder="10.50" 
+                                        className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        value={newTx.amount}
+                                        onChange={e => setNewTx({...newTx, amount: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
+                                    <input 
+                                        type="date" 
+                                        required
+                                        className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        value={newTx.date}
+                                        onChange={e => setNewTx({...newTx, date: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Catégorie</label>
+                                <select 
+                                    className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                                    value={newTx.category}
+                                    onChange={e => setNewTx({...newTx, category: e.target.value})}
+                                >
+                                    {Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <button type="submit" className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition mt-2">
+                                Valider la dépense
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
