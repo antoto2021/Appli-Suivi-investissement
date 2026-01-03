@@ -296,31 +296,83 @@ const app = {
     renderAssets: function() {
         const grid = document.getElementById('assetsGrid');
         if(!grid) return;
-        grid.innerHTML = '';
-        const assets = this.getPortfolio();
-        Object.values(assets).forEach(a => {
-            if(a.qty < 0.001) return;
-            const pru = a.invested/a.qty;
-            const curr = this.currentPrices[a.name] || pru;
-            const val = a.qty * curr;
-            const perf = ((val - a.invested)/a.invested)*100;
-            const color = this.strColor(a.name, 95, 90);
-            const border = this.strColor(a.name, 60, 50);
+        grid.innerHTML = ''; // On vide la grille
+        
+        const assets = this.getPortfolio(); // Récupère les positions groupées
+        const sortedAssets = Object.values(assets).sort((a,b) => b.invested - a.invested); // Tri par montant investi
 
+        if (sortedAssets.length === 0) {
+            grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10">Aucune position active. Ajoutez des transactions "Achat".</div>';
+            return;
+        }
+
+        sortedAssets.forEach(a => {
+            // Si la quantité est proche de 0 (position vendue), on n'affiche pas
+            if(a.qty < 0.001) return;
+
+            // Calculs
+            const pru = a.invested / a.qty; // Prix de Revient Unitaire
+            const currentPrice = this.currentPrices[a.name] || this.currentPrices[a.ticker] || pru; // Prix actuel ou PRU par défaut
+            const totalValue = a.qty * currentPrice; // Valeur totale actuelle
+            
+            // Calcul Plus/Moins Value
+            const gain = totalValue - a.invested;
+            const perf = ((gain) / a.invested) * 100;
+            
+            // Gestion des couleurs
+            const isPos = gain >= 0;
+            const colorClass = isPos ? 'text-green-600' : 'text-red-500';
+            const bgClass = isPos ? 'bg-green-50' : 'bg-red-50';
+            const borderClass = isPos ? 'border-green-200' : 'border-red-200';
+
+            // Injection HTML de la carte
             grid.innerHTML += `
-                <div class="bg-white rounded-xl shadow-sm border overflow-hidden" style="border-color:${border}">
-                    <div class="p-4 flex justify-between items-center" style="background-color:${color}">
-                        <h3 class="font-bold text-gray-800 truncate" style="color:${border}">${a.name}</h3>
-                        <span class="text-xs bg-white px-2 py-1 rounded font-mono font-bold text-gray-600">${a.ticker}</span>
-                    </div>
-                    <div class="p-5">
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="text-gray-500 text-xs font-bold uppercase">Cours</span>
-                            <input type="number" step="0.01" value="${curr.toFixed(2)}" onchange="app.updatePrice('${a.name}', this.value, '${a.ticker}')" class="price-input">
+                <div class="bg-white rounded-xl shadow-sm border ${borderClass} overflow-hidden flex flex-col">
+                    
+                    <div class="p-4 border-b border-gray-100 flex justify-between items-start bg-slate-50">
+                        <div class="overflow-hidden">
+                            <h3 class="font-bold text-gray-800 text-lg truncate" title="${a.name}">${a.name}</h3>
+                            <span class="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded">${a.ticker || 'N/A'}</span>
                         </div>
-                        <div class="flex justify-between items-end">
-                            <div><span class="text-xs text-gray-400">Total</span><div class="font-bold text-lg">${val.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</div></div>
-                            <div class="text-right"><span class="block text-xs text-gray-400">Perf.</span><span class="font-bold ${perf>=0?'text-green-600':'text-red-500'}">${perf>=0?'+':''}${perf.toFixed(1)}%</span></div>
+                        <div class="text-right">
+                             <div class="text-xs text-gray-400 uppercase font-bold">Qté</div>
+                             <div class="font-mono font-bold text-gray-700">${parseFloat(a.qty).toFixed(4).replace(/\.?0+$/,'')}</div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 space-y-3">
+                        
+                        <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
+                            <div class="text-left">
+                                <span class="block text-[10px] text-gray-400 uppercase">PRU (Achat)</span>
+                                <span class="font-mono text-sm text-gray-600">${pru.toFixed(2)} €</span>
+                            </div>
+                            <div class="text-right">
+                                <label class="block text-[10px] text-blue-500 uppercase font-bold mb-1"><i class="fa-solid fa-pen-to-square"></i> Prix Actuel</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    value="${currentPrice.toFixed(2)}" 
+                                    onchange="app.updatePrice('${a.name}', this.value, '${a.ticker}')" 
+                                    class="w-24 text-right font-bold text-gray-800 border-b-2 border-blue-200 focus:border-blue-500 outline-none bg-transparent transition"
+                                >
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-end pt-2">
+                            <div>
+                                <span class="text-xs text-gray-400 block">Valeur Totale</span>
+                                <div class="font-bold text-xl text-gray-800">${totalValue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</div>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-xs text-gray-400 block">Rendement</span>
+                                <span class="font-bold text-lg ${colorClass}">
+                                    ${isPos ? '+' : ''}${perf.toFixed(2)}%
+                                </span>
+                                <div class="text-[10px] ${colorClass} opacity-75">
+                                    (${isPos ? '+' : ''}${gain.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})})
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>`;
