@@ -121,6 +121,8 @@ const app = {
         'orange': 'ORA.PA',       // Orange
         'renault': 'RNO.PA',      // Renault
         'stellantis': 'STLAP.PA', // Stellantis
+        'neurones': 'NRO',        // Neurones
+        'accor': 'AC',            // Accor Groupe
 
         // --- USA (Tech & Indices) ---
         'apple': 'AAPL',          // Apple
@@ -131,11 +133,17 @@ const app = {
         'meta': 'META',           // Meta (Facebook)
         'nvidia': 'NVDA',         // Nvidia
         'realty income': 'O',     // Realty Income (Immo)
+        'rocket lab': 'RKLB',      // Rocket Lab
         
         // --- ETFS ---
         'cw8': 'CW8.PA',          // ETF World (Amundi)
-        'sp500': 'ESE.PA',        // ETF S&P 500 (BNP)
-        'nasdaq': 'PANX.PA'       // ETF Nasdaq
+        'sp500': 'SPX',        // ETF S&P 500 (BNP)
+        'nasdaq': 'NDX'       // ETF Nasdaq
+        'Ishares Physical Gold ETC': 'IGLN',    // ETF Or
+
+        // --- Autres ---
+        'CGM': 'GMF',             // GMF assurence vie
+        'mercedes': 'MBG',        // Mercedes
     },
     
     mockDividends: {
