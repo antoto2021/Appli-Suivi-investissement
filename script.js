@@ -8,6 +8,7 @@ const { useState, useEffect, useRef } = React;
 // =================================================================
 // 0. SERVICE DE BASE DE DONNÉES (IndexedDB V3)
 // =================================================================
+
 const dbService = {
     dbName: 'InvestTrackDB',
     version: 3, // Force la mise à jour de la structure DB
@@ -95,6 +96,7 @@ const dbService = {
 // =================================================================
 // 1. MODULE INVESTISSEMENT (Vanilla JS)
 // =================================================================
+
 const app = {
     transactions: [],
     currentPrices: {},
@@ -623,25 +625,46 @@ const app = {
 };
 
 // =================================================================
-// 2. BUDGET SCAN APP (REACT) - VERSION AVEC FORMULAIRE MANUEL
+// 2. BUDGET SCAN APP (REACT) - AVEC AUTO-CATÉGORISATION & ENSEIGNES
 // =================================================================
-const CATEGORIES = {
-    'Alimentation': ['carrefour', 'leclerc', 'auchan', 'lidl', 'courses'],
-    'Restauration': ['mcdo', 'uber', 'deliveroo', 'restaurant', 'cafe'],
-    'Transport': ['sncf', 'total', 'essence', 'peage', 'uber', 'parking'],
-    'Logement': ['loyer', 'edf', 'eau', 'internet'],
-    'Loisirs': ['netflix', 'cinema', 'sport'],
-    'Salaire': ['salaire', 'virement', 'cpam']
+
+// 1. Mots-clés pour DÉTECTER la catégorie via la description
+const DETECTION_KEYWORDS = {
+    'Alimentation': ['course', 'super u', 'leclerc', 'auchan', 'lidl', 'carrefour', 'intermarche', 'market', 'franprix', 'monoprix', 'boulangerie', 'ms nanterre'],
+    'Restauration': ['resto', 'mcdo', 'mcdonald', 'burger king', 'bk', 'kfc', 'uber', 'deliveroo', 'eat', 'tacos', 'pizza', 'sushi', 'café', 'starbucks', 'bistrot', 'restaurant', 'crous', 'bouillon', 'spiti'],
+    'Transport': ['sncf', 'train', 'navigo', 'ratp', 'uber', 'bolt', 'taxi', 'essence', 'total', 'esso', 'bp', 'shell', 'peage', 'parking', 'dott', 'lime', 'scooter'],
+    'Logement': ['loyer', 'edf', 'engie', 'eau', 'internet', 'bouygues', 'sfr', 'orange', 'free', 'assurance', 'taxe'],
+    'Loisirs': ['netflix', 'spotify', 'cinema', 'ugc', 'gaumont', 'sport', 'fitness', 'basic fit', 'abonnement', 'shotgun', 'place', 'concert', 'al miraath'],
+    'Salaire': ['salaire', 'virement', 'caf', 'cpam', 'remboursement', 'solde'],
+    'Investissement': ['bitstack', 'bourse', 'pea', 'cto', 'trade', 'republic', 'crypto', 'binance', 'coinbase', 'bricks', 'la premiere brique']
+};
+
+// 2. Liste initiale des ENSEIGNES (s'enrichit automatiquement)
+const DEFAULT_MERCHANTS = {
+    'Alimentation': ['Super U', 'Lidl', 'Carrefour', 'Leclerc', 'Auchan', 'MS Nanterre', 'Al Miraath'],
+    'Restauration': ['McDonald\'s', 'Burger King', 'Uber Eats', 'O Tacos', 'KFC', 'Starbucks', 'Crous', 'Spiti Sou', 'Le XV'],
+    'Transport': ['SNCF', 'Total Energies', 'Esso', 'Uber', 'Dott', 'RATP'],
+    'Logement': ['EDF', 'Bouygues Telecom', 'Loyer'],
+    'Loisirs': ['Netflix', 'Shotgun', 'UGC', 'Apple Services'],
+    'Salaire': ['Salaire', 'CAF', 'CPAM'],
+    'Investissement': ['Bitstack', 'Trade Republic', 'La Première Brique'],
+    'Autre': ['Amazon', 'Fnac']
 };
 
 const BudgetApp = () => {
     const [transactions, setTransactions] = useState([]);
     const [view, setView] = useState('dashboard'); 
     const [filterYear, setFilterYear] = useState('Tout'); 
-    
-    // NOUVEAU : États pour la modale d'ajout
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [newTx, setNewTx] = useState({ description: '', amount: '', date: '', category: 'Autre' });
+    
+    // État pour les enseignes (chargé depuis le stockage ou par défaut)
+    const [merchantDB, setMerchantDB] = useState(() => {
+        const saved = localStorage.getItem('invest_v5_merchants');
+        return saved ? JSON.parse(saved) : DEFAULT_MERCHANTS;
+    });
+
+    // Formulaire
+    const [newTx, setNewTx] = useState({ description: '', merchant: '', amount: '', date: '', category: 'Autre' });
 
     const barRef = useRef(null);
     const pieRef = useRef(null);
@@ -657,7 +680,8 @@ const BudgetApp = () => {
                     date: t.date || new Date().toISOString().split('T')[0],
                     amount: parseFloat(t.amount) || 0,
                     description: t.description || 'Inconnu',
-                    category: t.category || 'Autre'
+                    category: t.category || 'Autre',
+                    merchant: t.merchant || '' // Nouveau champ enseigne
                 }));
                 setTransactions(safeData.sort((a,b) => new Date(b.date) - new Date(a.date)));
             } catch (e) { console.error("Err Budget Load", e); }
@@ -667,16 +691,74 @@ const BudgetApp = () => {
         return () => window.removeEventListener('budget-update', load);
     }, []);
 
-    // Calcul Stats Dashboard
+    // --- MAGIE ICI : Auto-détection de la catégorie ---
+    useEffect(() => {
+        if (!newTx.description) return;
+        const text = newTx.description.toLowerCase();
+
+        // On parcourt les mots-clés de détection
+        for (const [cat, keywords] of Object.entries(DETECTION_KEYWORDS)) {
+            if (keywords.some(k => text.includes(k))) {
+                setNewTx(prev => ({ ...prev, category: cat }));
+                break; // On s'arrête à la première catégorie trouvée
+            }
+        }
+    }, [newTx.description]);
+
+    // Sauvegarde de la transaction + Apprentissage nouvelle enseigne
+    const saveManual = async (e) => {
+        e.preventDefault();
+        if(!newTx.description || !newTx.amount) return;
+
+        // 1. Sauvegarde Transaction
+        // Note: Si l'utilisateur n'a pas rempli "Enseigne", on utilise la Description
+        const finalMerchant = newTx.merchant || newTx.description; 
+
+        await dbService.add('budget', { 
+            id: Date.now(), 
+            date: newTx.date, 
+            description: newTx.description, // Description libre (ex: "Resto avec potes")
+            merchant: finalMerchant,        // Enseigne structurée (ex: "McDonald's")
+            amount: -Math.abs(parseFloat(newTx.amount)), 
+            category: newTx.category 
+        });
+
+        // 2. Apprentissage : Ajouter l'enseigne à la liste si elle n'existe pas
+        if (newTx.merchant && merchantDB[newTx.category]) {
+            const currentList = merchantDB[newTx.category];
+            // On vérifie si l'enseigne existe déjà (insensible à la casse)
+            const exists = currentList.some(m => m.toLowerCase() === newTx.merchant.toLowerCase());
+            
+            if (!exists) {
+                const updatedList = [...currentList, newTx.merchant].sort();
+                const newDB = { ...merchantDB, [newTx.category]: updatedList };
+                setMerchantDB(newDB);
+                localStorage.setItem('invest_v5_merchants', JSON.stringify(newDB)); // Sauvegarde persistante
+            }
+        } else if (newTx.merchant && !merchantDB[newTx.category]) {
+            // Cas où la catégorie n'a pas encore de liste
+            const newDB = { ...merchantDB, [newTx.category]: [newTx.merchant] };
+            setMerchantDB(newDB);
+            localStorage.setItem('invest_v5_merchants', JSON.stringify(newDB));
+        }
+        
+        setIsModalOpen(false);
+        window.dispatchEvent(new Event('budget-update'));
+    };
+
+    // ... (Le reste des fonctions getStats, updateTx, deleteTx, render graphiques reste IDENTIQUE) ...
+    // Je réécris les fonctions courtes pour que le bloc soit complet et fonctionnel
+
     const getStats = () => {
         const now = new Date();
         const currentM = now.getMonth(), currentY = now.getFullYear();
-        const currentTx = transactions.filter(t => { 
-            const d = new Date(t.date); 
-            return d.getMonth()===currentM && d.getFullYear()===currentY; 
-        });
+        const currentTx = transactions.filter(t => { const d = new Date(t.date); return d.getMonth()===currentM && d.getFullYear()===currentY; });
+        // On utilise 'merchant' s'il existe, sinon 'description' pour le Top 5
         const merchants = {};
-        currentTx.forEach(t => { if(t.amount < 0) merchants[t.description] = (merchants[t.description]||0) + Math.abs(t.amount); });
+        currentTx.forEach(t => { 
+            const name = t.merchant || t.description;
+            if(t.amount < 0) merchants[name] = (merchants[name]||0) + Math.abs(t.amount); 
+        });
         const top5 = Object.entries(merchants).sort((a,b) => b[1]-a[1]).slice(0,5);
         const cats = {};
         currentTx.forEach(t => { if(t.amount < 0) cats[t.category] = (cats[t.category]||0) + Math.abs(t.amount); });
@@ -686,7 +768,6 @@ const BudgetApp = () => {
         return { currentTx, top5, cats, sixM };
     };
 
-    // Graphiques
     useEffect(() => {
         if(view !== 'dashboard') return;
         const { cats, sixM } = getStats();
@@ -694,7 +775,7 @@ const BudgetApp = () => {
             if(pieRef.current) {
                 if(window.bPie) window.bPie.destroy();
                 const ctx = pieRef.current.getContext('2d');
-                window.bPie = new Chart(ctx, { type: 'doughnut', data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#ec4899','#10b981'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } } });
+                window.bPie = new Chart(ctx, { type: 'doughnut', data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#ec4899','#10b981', '#6366f1'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } } });
             }
             if(barRef.current) {
                 if(window.bBar) window.bBar.destroy();
@@ -705,118 +786,55 @@ const BudgetApp = () => {
         return () => clearTimeout(timer);
     }, [transactions, view]);
 
-    // --- GESTION DES ACTIONS ---
-
-    // 1. Ouvrir le formulaire (remplace l'ajout immédiat)
-    const openAddModal = () => {
-        setNewTx({ 
-            description: '', 
-            amount: '', 
-            date: new Date().toISOString().split('T')[0], 
-            category: 'Autre' 
-        });
-        setIsModalOpen(true);
-    };
-
-    // 2. Sauvegarder la nouvelle dépense
-    const saveManual = async (e) => {
-        e.preventDefault();
-        if(!newTx.description || !newTx.amount) return;
-
-        await dbService.add('budget', { 
-            id: Date.now(), 
-            date: newTx.date, 
-            description: newTx.description, 
-            amount: -Math.abs(parseFloat(newTx.amount)), // Force en négatif pour une dépense
-            category: newTx.category 
-        });
-        
-        setIsModalOpen(false);
-        window.dispatchEvent(new Event('budget-update'));
-    };
-
+    const openAddModal = () => { setNewTx({ description: '', merchant: '', amount: '', date: new Date().toISOString().split('T')[0], category: 'Autre' }); setIsModalOpen(true); };
     const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add('budget', {...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
     const deleteTx = async (id) => { if(confirm("Supprimer ?")) { await dbService.delete('budget', id); window.dispatchEvent(new Event('budget-update')); } };
     
-    // Filtres Historique
     const availableYears = React.useMemo(() => {
-        try {
-            const years = new Set(transactions.map(t => (t.date ? String(t.date).substring(0,4) : '2024')));
-            return ['Tout', ...Array.from(years).sort().reverse()];
-        } catch(e) { return ['Tout']; }
+        try { const years = new Set(transactions.map(t => (t.date ? String(t.date).substring(0,4) : '2024'))); return ['Tout', ...Array.from(years).sort().reverse()]; } catch(e) { return ['Tout']; }
     }, [transactions]);
-
-    const filteredList = transactions.filter(t => {
-        if (filterYear === 'Tout') return true;
-        return t.date && String(t.date).startsWith(filterYear);
-    });
-
+    const filteredList = transactions.filter(t => filterYear === 'Tout' ? true : t.date && String(t.date).startsWith(filterYear));
     const { top5 } = getStats();
 
     return (
         <div className="flex flex-col h-full bg-slate-50 relative">
-            {/* Header */}
             <div className="flex justify-between items-center p-4 bg-white shadow-sm mb-2 sticky top-0 z-20">
                 <div className="flex gap-2">
                     <button onClick={()=>setView('dashboard')} className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${view==='dashboard'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>Dashboard</button>
                     <button onClick={()=>setView('list')} className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${view==='list'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>Historique</button>
                 </div>
-                {/* Bouton modifié pour ouvrir la modale */}
                 <button onClick={openAddModal} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">+ Manuel</button>
             </div>
 
-            {/* Contenu */}
             <div className="flex-1 overflow-y-auto px-4 pb-24" style={{ height: 'calc(100vh - 180px)' }}>
-                
                 {view === 'dashboard' && (
                     <div className="space-y-6 animate-fade-in pb-10">
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                            <h3 className="text-sm font-bold text-gray-700 mb-2">Dépenses (6 mois)</h3>
-                            <div className="h-48 relative"><canvas ref={barRef}></canvas></div>
-                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"><h3 className="text-sm font-bold text-gray-700 mb-2">Dépenses (6 mois)</h3><div className="h-48 relative"><canvas ref={barRef}></canvas></div></div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                                <h3 className="text-sm font-bold text-gray-700 mb-2">Top Dépenses (Ce mois)</h3>
-                                <div className="space-y-2">
-                                    {top5.map(([n,a], i) => (<div key={i} className="flex justify-between text-xs items-center border-b border-gray-50 last:border-0 pb-1"><span className="truncate flex-1 font-medium text-gray-600">{i+1}. {n}</span><span className="font-bold text-gray-800">{a.toFixed(2)}€</span></div>))}
-                                    {top5.length===0 && <p className="text-xs text-gray-400">Rien ce mois-ci.</p>}
-                                </div>
-                            </div>
-                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                                <h3 className="text-sm font-bold text-gray-700 mb-2">Répartition</h3>
-                                <div className="h-40 relative"><canvas ref={pieRef}></canvas></div>
-                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"><h3 className="text-sm font-bold text-gray-700 mb-2">Top Dépenses (Ce mois)</h3><div className="space-y-2">{top5.map(([n,a], i) => (<div key={i} className="flex justify-between text-xs items-center border-b border-gray-50 last:border-0 pb-1"><span className="truncate flex-1 font-medium text-gray-600">{i+1}. {n}</span><span className="font-bold text-gray-800">{a.toFixed(2)}€</span></div>))}{top5.length===0 && <p className="text-xs text-gray-400">Rien ce mois-ci.</p>}</div></div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"><h3 className="text-sm font-bold text-gray-700 mb-2">Répartition</h3><div className="h-40 relative"><canvas ref={pieRef}></canvas></div></div>
                         </div>
                     </div>
                 )}
-
                 {view === 'list' && (
                     <div className="space-y-4 animate-fade-in pb-10">
-                        <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-                            {availableYears.map(y => (
-                                <button key={y} onClick={() => setFilterYear(y)} className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterYear === y ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200'}`}>{y}</button>
-                            ))}
-                        </div>
+                        <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">{availableYears.map(y => (<button key={y} onClick={() => setFilterYear(y)} className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterYear === y ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200'}`}>{y}</button>))}</div>
                         <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between">
-                                <span>{filterYear === 'Tout' ? 'Tout' : filterYear}</span>
-                                <span>{filteredList.length} lignes</span>
-                            </h3>
-                            {filteredList.length === 0 ? (
-                                <div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée.</p></div>
-                            ) : (
+                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between"><span>{filterYear}</span><span>{filteredList.length} lignes</span></h3>
+                            {filteredList.length === 0 ? (<div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée.</p></div>) : (
                                 filteredList.map(t => (
                                     <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2">
-                                        <div className="flex justify-between items-center gap-2">
-                                            <input type="text" value={t.description} onChange={(e)=>updateTx(t.id,'description',e.target.value)} className="font-bold text-gray-700 bg-transparent w-full focus:outline-none text-sm" />
+                                        <div className="flex justify-between items-start gap-2">
+                                            <div className="flex-1">
+                                                <input type="text" value={t.merchant || t.description} readOnly className="font-bold text-gray-700 bg-transparent w-full focus:outline-none text-sm" />
+                                                <div className="text-[10px] text-gray-400 italic truncate">{t.description}</div>
+                                            </div>
                                             <input type="number" step="0.01" value={t.amount} onChange={(e)=>updateTx(t.id,'amount',parseFloat(e.target.value))} className={`text-right w-24 font-mono font-bold bg-transparent focus:outline-none rounded ${t.amount<0?'text-slate-700':'text-emerald-600'}`} />
                                         </div>
-                                        <div className="flex justify-between items-center text-xs">
+                                        <div className="flex justify-between items-center text-xs mt-1">
                                             <div className="flex gap-2 items-center flex-wrap">
                                                 <input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-gray-400 bg-transparent border-none p-0" />
-                                                <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 outline-none">
-                                                    {Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}
-                                                </select>
+                                                <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 outline-none">{Object.keys(DETECTION_KEYWORDS).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}</select>
                                             </div>
                                             <button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500 px-2"><i className="fa-solid fa-trash"></i></button>
                                         </div>
@@ -828,26 +846,29 @@ const BudgetApp = () => {
                 )}
             </div>
 
-            {/* MODALE D'AJOUT MANUEL (REACT) */}
+            {/* MODALE D'AJOUT MANUEL INTELLIGENTE */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-fade-in">
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                            <h3 className="font-bold text-gray-800">Ajout Manuel</h3>
+                            <h3 className="font-bold text-gray-800">Ajout Intelligent</h3>
                             <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                         </div>
                         <form onSubmit={saveManual} className="p-5 space-y-4">
+                            
+                            {/* 1. Description qui déclenche la détection */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
                                 <input 
                                     type="text" 
                                     required
-                                    placeholder="Ex: Courses, Resto..." 
+                                    placeholder="Ex: Resto, Courses..." 
                                     className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                                     value={newTx.description}
                                     onChange={e => setNewTx({...newTx, description: e.target.value})}
                                 />
                             </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Montant (€)</label>
@@ -855,7 +876,7 @@ const BudgetApp = () => {
                                         type="number" 
                                         step="0.01" 
                                         required
-                                        placeholder="10.50" 
+                                        placeholder="0.00" 
                                         className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                                         value={newTx.amount}
                                         onChange={e => setNewTx({...newTx, amount: e.target.value})}
@@ -872,18 +893,44 @@ const BudgetApp = () => {
                                     />
                                 </div>
                             </div>
+
+                            {/* 2. Catégorie (Auto-détectée mais modifiable) */}
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Catégorie</label>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex justify-between">
+                                    <span>Catégorie</span>
+                                    {newTx.description && <span className="text-emerald-600 text-[10px] italic">Détecté auto</span>}
+                                </label>
                                 <select 
-                                    className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                                    className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white font-bold text-gray-700"
                                     value={newTx.category}
                                     onChange={e => setNewTx({...newTx, category: e.target.value})}
                                 >
-                                    {Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c => (
+                                    {Object.keys(DETECTION_KEYWORDS).concat(['Autre']).map(c => (
                                         <option key={c} value={c}>{c}</option>
                                     ))}
                                 </select>
                             </div>
+
+                            {/* 3. Enseigne (Liste déroulante qui s'adapte à la catégorie + saisie libre) */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Enseigne (Optionnel)</label>
+                                <input 
+                                    type="text" 
+                                    list="merchants-list"
+                                    placeholder="Sélectionner ou écrire..." 
+                                    className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    value={newTx.merchant}
+                                    onChange={e => setNewTx({...newTx, merchant: e.target.value})}
+                                />
+                                {/* La liste change selon la catégorie sélectionnée */}
+                                <datalist id="merchants-list">
+                                    {(merchantDB[newTx.category] || []).map((m, idx) => (
+                                        <option key={idx} value={m} />
+                                    ))}
+                                </datalist>
+                                <p className="text-[10px] text-gray-400 mt-1 italic">Si vous tapez une nouvelle enseigne, elle sera mémorisée.</p>
+                            </div>
+
                             <button type="submit" className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition mt-2">
                                 Valider la dépense
                             </button>
@@ -898,6 +945,7 @@ const BudgetApp = () => {
 // =================================================================
 // 3. SMART PDF/IMAGE IMPORTER (MODULE IA)
 // =================================================================
+
 const pdfImporter = {
     apiKey: '',
     fileBase64: '',
@@ -1016,6 +1064,7 @@ const pdfImporter = {
 // =================================================================
 // 4. INFO MODULE
 // =================================================================
+
 const infoModule = {
     config: { username: 'antoto2021', repo: 'Suivi-investissement' },
     init: async function() { this.renderLocalInfo(); setTimeout(() => this.checkGitHub(true), 3000); },
@@ -1052,6 +1101,7 @@ const infoModule = {
 // =================================================================
 // 5. BOOTSTRAP (INITIALISATION IMMÉDIATE)
 // =================================================================
+
 // Initialisation Directe (Pour contourner Babel latency)
 const bootstrap = () => {
     console.log("Bootstrap Application Complete...");
