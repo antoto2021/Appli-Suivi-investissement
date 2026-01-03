@@ -1,16 +1,16 @@
 /**
- * INVEST TRACK V5 - FINAL INTEGRATED BUILD
- * Includes: Unified DB (V3), React Budget, Portfolio View, AI, Auto-Ticker
+ * INVEST TRACK V5 - VERSION COMPLÈTE & LISIBLE
+ * Inclus : Base de données V3, Portefeuille, Budget React, IA, Auto-Ticker
  */
 
 const { useState, useEffect, useRef } = React;
 
 // =================================================================
-// 0. SERVICE DE BASE DE DONNÉES UNIFIÉ (IndexedDB V3)
+// 0. SERVICE DE BASE DE DONNÉES (IndexedDB V3)
 // =================================================================
 const dbService = {
     dbName: 'InvestTrackDB',
-    version: 3, 
+    version: 3, // Force la mise à jour de la structure DB
     db: null,
 
     async init() {
@@ -19,18 +19,38 @@ const dbService = {
             const req = indexedDB.open(this.dbName, this.version);
             
             req.onupgradeneeded = (e) => {
-                console.log("DB Upgrade: Création des tables...");
+                console.log("DB Upgrade: Création/Mise à jour des tables...");
                 const db = e.target.result;
-                if (!db.objectStoreNames.contains('budget')) db.createObjectStore('budget', { keyPath: 'id' });
+                
+                // 1. Table Budget
+                if (!db.objectStoreNames.contains('budget')) {
+                    db.createObjectStore('budget', { keyPath: 'id' });
+                }
+                
+                // 2. Table Transactions Bourse
                 if (!db.objectStoreNames.contains('invest_tx')) {
                     const store = db.createObjectStore('invest_tx', { keyPath: 'id', autoIncrement: true });
-                    if (!store.indexNames.contains('date')) store.createIndex('date', 'date', { unique: false });
+                    if (!store.indexNames.contains('date')) {
+                        store.createIndex('date', 'date', { unique: false });
+                    }
                 }
-                if (!db.objectStoreNames.contains('invest_prices')) db.createObjectStore('invest_prices', { keyPath: 'ticker' });
+                
+                // 3. Table Prix Bourse
+                if (!db.objectStoreNames.contains('invest_prices')) {
+                    db.createObjectStore('invest_prices', { keyPath: 'ticker' });
+                }
             };
 
-            req.onsuccess = (e) => { this.db = e.target.result; resolve(this.db); };
-            req.onerror = (e) => { console.error("DB Error:", e); reject(e); };
+            req.onsuccess = (e) => {
+                this.db = e.target.result;
+                console.log("✅ DB Connectée");
+                resolve(this.db);
+            };
+
+            req.onerror = (e) => {
+                console.error("❌ Erreur DB:", e.target.error);
+                reject("DB Error: " + e.target.error);
+            };
         });
     },
 
@@ -43,14 +63,19 @@ const dbService = {
                 req.onsuccess = () => resolve(req.result || []);
                 req.onerror = () => resolve([]);
             });
-        } catch (e) { return []; }
+        } catch (e) {
+            console.error(e);
+            return [];
+        }
     },
 
     async add(storeName, item) {
         await this.init();
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(storeName, 'readwrite');
+            // Ajout d'un ID si absent (pour le budget)
             if(storeName === 'budget' && !item.id) item.id = Date.now();
+            
             const req = tx.objectStore(storeName).put(item);
             req.onsuccess = () => resolve(item);
             req.onerror = (e) => reject(e);
@@ -75,69 +100,74 @@ const app = {
     currentPrices: {},
     charts: {},
     
-// MINI BDD : CORRESPONDANCE NOMS -> TICKERS : Modifie cette liste pour ajouter tes propres actifs.
-    // Clé (gauche) : Mot clé en minuscule (partie du nom).
-    // Valeur (droite) : Le Ticker boursier exact.
+    // MINI BDD : LISTE DES TICKERS (MODIFIABLE ICI)
     tickerDB: {
-        // --- FRANCE (CAC 40 / SBF 120) ---
-        'total': 'TTE.PA',        // TotalEnergies
-        'vinci': 'DG.PA',         // Vinci
-        'air liquide': 'AI.PA',   // Air Liquide
-        'lvmh': 'MC.PA',          // LVMH
-        'sanofi': 'SAN.PA',       // Sanofi
-        'schneider': 'SU.PA',     // Schneider Electric
-        'loreal': 'OR.PA',        // L'Oréal
-        'hermes': 'RMS.PA',       // Hermès
-        'bnpp': 'BNP.PA',         // BNP Paribas
-        'axa': 'CS.PA',           // AXA
-        'credit agricole': 'ACA.PA', // Crédit Agricole
-        'danone': 'BN.PA',        // Danone
-        'orange': 'ORA.PA',       // Orange
-        'renault': 'RNO.PA',      // Renault
-        'stellantis': 'STLAP.PA', // Stellantis
-        'neurones': 'NRO',        // Neurones
-        'accor': 'AC',            // Accor Groupe
+        // CAC 40 & SBF 120
+        'total': 'TTE.PA',
+        'vinci': 'DG.PA',
+        'air liquide': 'AI.PA',
+        'lvmh': 'MC.PA',
+        'sanofi': 'SAN.PA',
+        'schneider': 'SU.PA',
+        'loreal': 'OR.PA',
+        'hermes': 'RMS.PA',
+        'bnpp': 'BNP.PA',
+        'axa': 'CS.PA',
+        'credit agricole': 'ACA.PA',
+        'danone': 'BN.PA',
+        'orange': 'ORA.PA',
+        'renault': 'RNO.PA',
+        'stellantis': 'STLAP.PA',
+        'neurones': 'NRO',        
+        'accor': 'AC',           
 
-        // --- USA (Tech & Indices) ---
-        'apple': 'AAPL',          // Apple
-        'microsoft': 'MSFT',      // Microsoft
-        'tesla': 'TSLA',          // Tesla
-        'amazon': 'AMZN',         // Amazon
-        'google': 'GOOGL',        // Alphabet
-        'meta': 'META',           // Meta (Facebook)
-        'nvidia': 'NVDA',         // Nvidia
-        'realty income': 'O',     // Realty Income (Immo)
-        'rocket lab': 'RKLB',      // Rocket Lab
+        // US & TECH
+        'apple': 'AAPL',
+        'microsoft': 'MSFT',
+        'tesla': 'TSLA',
+        'amazon': 'AMZN',
+        'google': 'GOOGL',
+        'meta': 'META',
+        'nvidia': 'NVDA',
+        'realty income': 'O',
+        'rocket lab': 'RKLB',
         
-        // --- ETFS ---
-        'cw8': 'CW8.PA',          // ETF World (Amundi)
-        'sp500': 'SPX',        // ETF S&P 500 (BNP)
-        'nasdaq': 'NDX',       // ETF Nasdaq
-        'Ishares Physical Gold ETC': 'IGLN',    // ETF Or
+        // ETFs
+        'cw8': 'CW8.PA',        
+        'sp500': 'SPX',       
+        'nasdaq': 'NDX',      
+        'Ishares Physical Gold ETC': 'IGLN',
 
-        // --- Autres ---
-        'CGM': 'GMF',             // GMF assurence vie
-        'mercedes': 'MBG',        // Mercedes
+        // Autres
+        'CGM': 'GMF',            
+        'mercedes': 'MBG',  
     },
     
-    mockDividends: { 'Action Vinci': { current: 4.50 }, 'Total Energie': { current: 3.20 } },
-    tips: ["Diversifiez !", "Intérêts composés = Magie.", "Patience est mère de vertu.", "Achetez la peur."],
+    mockDividends: {
+        'Action Vinci': { current: 4.50 }, 
+        'Total Energie': { current: 3.20 }
+    },
+    tips: ["Diversifiez !", "Patience est mère de vertu.", "Achetez la peur.", "Investissez régulièrement."],
 
     init: async function() {
-        console.log("Init App Bourse...");
+        console.log("Démarrage App Bourse...");
         await this.loadData();
         this.loadDailyTip();
         this.setupAutoFill();
         this.renderTable();
-        // Si on est sur l'onglet assets, on le charge
+        
+        // Si on rafraichit sur l'onglet portefeuille, on l'affiche
         if(!document.getElementById('assets-view').classList.contains('hidden')) {
             this.renderAssets();
         }
     },
 
     nav: function(id) {
-        document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
-        document.querySelectorAll('main > section').forEach(el => el.classList.remove('block'));
+        // Gestion de l'affichage des sections
+        document.querySelectorAll('main > section').forEach(el => {
+            el.classList.add('hidden');
+            el.classList.remove('block');
+        });
         
         const target = document.getElementById(id + '-view');
         if(target) {
@@ -145,6 +175,7 @@ const app = {
             target.classList.add('block');
         }
         
+        // Rafraîchissement des données selon la vue
         if(id === 'dashboard') { this.calcKPIs(); setTimeout(() => this.renderPie(), 100); }
         if(id === 'assets') this.renderAssets();
         if(id === 'transactions') this.renderTable();
@@ -156,16 +187,26 @@ const app = {
 
     loadData: async function() {
         try {
+            // Chargement Transactions
             const txData = await dbService.getAll('invest_tx');
             this.transactions = (txData && txData.length > 0) ? txData : [];
+
+            // Chargement Prix
             const priceData = await dbService.getAll('invest_prices');
             priceData.forEach(p => this.currentPrices[p.ticker] = p.price);
-        } catch(e) { console.error(e); }
+            
+            console.log(`Données chargées: ${this.transactions.length} transactions`);
+        } catch(e) {
+            console.error("Erreur chargement:", e);
+        }
     },
 
     addTransaction: async function(tx) {
         if(!tx.id) tx.id = Date.now() + Math.random();
+        
         await dbService.add('invest_tx', tx);
+        
+        // Mise à jour locale
         const idx = this.transactions.findIndex(t => t.id === tx.id);
         if(idx >= 0) this.transactions[idx] = tx;
         else this.transactions.push(tx);
@@ -174,8 +215,10 @@ const app = {
     updatePrice: async function(name, price, ticker=null) {
         const val = parseFloat(price);
         this.currentPrices[name] = val;
+        
         const key = ticker || name;
         await dbService.add('invest_prices', { ticker: key, price: val });
+        
         this.renderAssets();
         this.toast("Prix sauvegardé");
     },
@@ -201,21 +244,26 @@ const app = {
     calcKPIs: function() {
         const assets = this.getPortfolio();
         let invested = 0, currentVal = 0;
+
         Object.values(assets).forEach(a => {
             if(a.qty < 0.001) return;
             invested += a.invested;
             const price = this.currentPrices[a.name] || this.currentPrices[a.ticker] || (a.invested / a.qty);
             currentVal += (a.qty * price);
         });
+
         const diff = currentVal - invested;
         const perf = invested > 0 ? (diff / invested) * 100 : 0;
 
+        // Mise à jour du DOM
         if(document.getElementById('kpiTotal')) {
             document.getElementById('kpiTotal').textContent = invested.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
             document.getElementById('kpiFuture').textContent = currentVal.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
+            
             const diffEl = document.getElementById('kpiDiff');
             diffEl.textContent = `${diff>=0?'+':''}${diff.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}`;
             diffEl.className = `sub-value ${diff>=0?'text-green-600':'text-red-500'}`;
+            
             const perfEl = document.getElementById('kpiReturn');
             perfEl.textContent = `${perf>=0?'+':''}${perf.toFixed(2)} %`;
             perfEl.className = `value ${perf>=0?'text-green-600':'text-red-500'}`;
@@ -227,28 +275,40 @@ const app = {
         const ctx = document.getElementById('pieChart')?.getContext('2d');
         if(!ctx) return;
         if(this.charts.pie) this.charts.pie.destroy();
+        
         const acc = {};
         this.transactions.filter(t=>t.op==='Achat').forEach(t => acc[t.account] = (acc[t.account]||0) + (t.qty*t.price));
-        this.charts.pie = new Chart(ctx, { type: 'doughnut', data: { labels: Object.keys(acc), datasets: [{ data: Object.values(acc), backgroundColor: ['#3b82f6','#8b5cf6','#10b981','#f59e0b'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } } });
+        
+        this.charts.pie = new Chart(ctx, {
+            type: 'doughnut',
+            data: { labels: Object.keys(acc), datasets: [{ data: Object.values(acc), backgroundColor: ['#3b82f6','#8b5cf6','#10b981','#f59e0b'] }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+        });
     },
 
     renderProjections: function() {
         const ctx = document.getElementById('mainProjectionChart')?.getContext('2d');
         if(!ctx) return;
         if(this.charts.proj) this.charts.proj.destroy();
+        
         const years = parseInt(document.getElementById('projYears').value) || 20;
         const labels = Array.from({length: years+1}, (_, i) => `An ${i}`);
         
         const kpis = this.calcKPIs();
-        let growthRate = 0.05;
+        let growthRate = 0.05; // 5% par défaut
         if(kpis.invested > 0) growthRate = Math.max(0.02, Math.min(0.15, (kpis.currentVal - kpis.invested) / kpis.invested));
 
         let cap = 0;
         this.transactions.forEach(t => { if(t.op==='Achat') cap += t.qty*t.price; if(t.op==='Vente') cap -= t.qty*t.price; });
+        
         const data = [cap];
         for(let i=1; i<=years; i++) data.push(data[i-1] * (1 + growthRate));
 
-        this.charts.proj = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ label: `Capital (Taux: ${(growthRate*100).toFixed(1)}%)`, data, borderColor: '#9333ea', backgroundColor: 'rgba(147, 51, 234, 0.1)', fill: true }] }, options: { maintainAspectRatio: false } });
+        this.charts.proj = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets: [{ label: `Capital (Taux: ${(growthRate*100).toFixed(1)}%)`, data, borderColor: '#9333ea', backgroundColor: 'rgba(147, 51, 234, 0.1)', fill: true }] },
+            options: { maintainAspectRatio: false }
+        });
         this.renderYearlyBar();
         this.renderFrequency();
     },
@@ -257,41 +317,60 @@ const app = {
         const ctx = document.getElementById('yearlyBarChart')?.getContext('2d');
         if(!ctx) return;
         if(this.charts.bar) this.charts.bar.destroy();
+        
         const yData = {};
-        this.transactions.filter(t=>t.op==='Achat').forEach(t => { const y = t.date.split('-')[0]; yData[y] = (yData[y]||0) + (t.qty*t.price); });
-        this.charts.bar = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(yData).sort(), datasets: [{ label:'Investi', data:Object.values(yData), backgroundColor:'#10b981' }] }, options: { maintainAspectRatio: false } });
+        this.transactions.filter(t=>t.op==='Achat').forEach(t => {
+            const y = t.date.split('-')[0];
+            yData[y] = (yData[y]||0) + (t.qty*t.price);
+        });
+        
+        this.charts.bar = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: Object.keys(yData).sort(), datasets: [{ label:'Investi', data:Object.values(yData), backgroundColor:'#10b981' }] },
+            options: { maintainAspectRatio: false }
+        });
     },
 
     renderFrequency: function() {
         const ctx = document.getElementById('frequencyChart')?.getContext('2d');
         if(!ctx) return;
         if(this.charts.freq) this.charts.freq.destroy();
+        
         let count = 0;
         const sorted = [...this.transactions].sort((a,b)=>new Date(a.date)-new Date(b.date));
-        const data = sorted.map(t => ++count);
-        this.charts.freq = new Chart(ctx, { type: 'line', data: { labels: sorted.map(t=>t.date), datasets: [{ label:'Opérations', data, borderColor:'#6366f1', pointRadius:0 }] }, options: { maintainAspectRatio: false, scales: { x: { display: false } } } });
+        
+        this.charts.freq = new Chart(ctx, {
+            type: 'line',
+            data: { labels: sorted.map(t=>t.date), datasets: [{ label:'Opérations', data: sorted.map(t => ++count), borderColor:'#6366f1', pointRadius:0 }] },
+            options: { maintainAspectRatio: false, scales: { x: { display: false } } }
+        });
     },
 
-    // --- NOUVELLE FONCTION RENDER ASSETS (PORTEFEUILLE) ---
+    // --- VUE PORTEFEUILLE (Nouvel onglet) ---
     renderAssets: function() {
         const grid = document.getElementById('assetsGrid');
         if(!grid) return;
-        grid.innerHTML = ''; 
+        grid.innerHTML = '';
+        
         const assets = this.getPortfolio();
         const sortedAssets = Object.values(assets).sort((a,b) => b.invested - a.invested);
 
         if (sortedAssets.length === 0) {
-            grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10">Aucune position. Ajoutez des transactions "Achat".</div>';
+            grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10">Aucune position active. Ajoutez des transactions "Achat".</div>';
             return;
         }
 
         sortedAssets.forEach(a => {
-            if(a.qty < 0.001) return;
+            if(a.qty < 0.001) return; // Position vendue
+
             const pru = a.invested / a.qty;
+            // On cherche le prix par Nom OU par Ticker
             const currentPrice = this.currentPrices[a.name] || this.currentPrices[a.ticker] || pru;
+            
             const totalValue = a.qty * currentPrice;
             const gain = totalValue - a.invested;
             const perf = ((gain) / a.invested) * 100;
+            
             const isPos = gain >= 0;
             const colorClass = isPos ? 'text-green-600' : 'text-red-500';
             const borderClass = isPos ? 'border-green-200' : 'border-red-200';
@@ -308,20 +387,38 @@ const app = {
                              <div class="font-mono font-bold text-gray-700">${parseFloat(a.qty).toFixed(4).replace(/\.?0+$/,'')}</div>
                         </div>
                     </div>
+
                     <div class="p-4 space-y-3">
                         <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
-                            <div class="text-left"><span class="block text-[10px] text-gray-400 uppercase">PRU</span><span class="font-mono text-sm text-gray-600">${pru.toFixed(2)} €</span></div>
+                            <div class="text-left">
+                                <span class="block text-[10px] text-gray-400 uppercase">PRU</span>
+                                <span class="font-mono text-sm text-gray-600">${pru.toFixed(2)} €</span>
+                            </div>
                             <div class="text-right">
                                 <label class="block text-[10px] text-blue-500 uppercase font-bold mb-1"><i class="fa-solid fa-pen-to-square"></i> Prix Actuel</label>
-                                <input type="number" step="0.01" value="${currentPrice.toFixed(2)}" onchange="app.updatePrice('${a.name}', this.value, '${a.ticker}')" class="w-24 text-right font-bold text-gray-800 border-b-2 border-blue-200 focus:border-blue-500 outline-none bg-transparent">
+                                <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    value="${currentPrice.toFixed(2)}" 
+                                    onchange="app.updatePrice('${a.name}', this.value, '${a.ticker}')" 
+                                    class="w-24 text-right font-bold text-gray-800 border-b-2 border-blue-200 focus:border-blue-500 outline-none bg-transparent"
+                                >
                             </div>
                         </div>
+
                         <div class="flex justify-between items-end pt-2">
-                            <div><span class="text-xs text-gray-400 block">Total</span><div class="font-bold text-xl text-gray-800">${totalValue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</div></div>
+                            <div>
+                                <span class="text-xs text-gray-400 block">Valeur Totale</span>
+                                <div class="font-bold text-xl text-gray-800">${totalValue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</div>
+                            </div>
                             <div class="text-right">
                                 <span class="text-xs text-gray-400 block">Perf</span>
-                                <span class="font-bold text-lg ${colorClass}">${isPos?'+':''}${perf.toFixed(2)}%</span>
-                                <div class="text-[10px] ${colorClass} opacity-75">(${isPos?'+':''}${gain.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})})</div>
+                                <span class="font-bold text-lg ${colorClass}">
+                                    ${isPos ? '+' : ''}${perf.toFixed(2)}%
+                                </span>
+                                <div class="text-[10px] ${colorClass} opacity-75">
+                                    (${isPos ? '+' : ''}${gain.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})})
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -333,14 +430,19 @@ const app = {
         const tbody = document.querySelector('#transactionsTable tbody');
         if(!tbody) return;
         tbody.innerHTML = '';
+        
         const sorted = [...this.transactions].sort((a,b)=>new Date(b.date)-new Date(a.date));
         
-        if(sorted.length === 0) document.getElementById('emptyState')?.classList.remove('hidden');
-        else document.getElementById('emptyState')?.classList.add('hidden');
+        if(sorted.length === 0) {
+            document.getElementById('emptyState')?.classList.remove('hidden');
+        } else {
+            document.getElementById('emptyState')?.classList.add('hidden');
+        }
 
         sorted.forEach(tx => {
             const total = tx.op==='Dividende' ? tx.price : (tx.qty*tx.price);
             const badge = tx.op==='Achat'?'bg-blue-100 text-blue-800':(tx.op==='Vente'?'bg-red-100 text-red-800':'bg-emerald-100 text-emerald-800');
+            
             tbody.innerHTML += `
                 <tr class="bg-white border-b hover:bg-gray-50 transition">
                     <td class="px-4 py-3 font-mono text-xs">${tx.date}</td>
@@ -364,6 +466,7 @@ const app = {
         container.innerHTML = '';
         const assets = this.getPortfolio();
         let found = false;
+
         Object.values(assets).forEach(a => {
             if(a.qty < 0.01) return;
             const info = this.mockDividends[a.name] || { current: 0 };
@@ -372,7 +475,14 @@ const app = {
                 const total = a.qty * info.current;
                 const col = this.strColor(a.name, 95, 90);
                 const border = this.strColor(a.name, 60, 50);
-                container.innerHTML += `<div class="bg-white rounded-xl shadow-sm border p-4" style="background:${col}; border-color:${border}"><div class="flex justify-between font-bold" style="color:${border}"><span>${a.name}</span><i class="fa-solid fa-coins"></i></div><div class="mt-4 flex justify-between items-end"><div><p class="text-xs text-gray-500">Revenu Est.</p><p class="text-xl font-bold text-emerald-700">${total.toFixed(2)} €</p></div><div class="text-right"><p class="text-xs text-gray-500">Unit.</p><p class="font-mono">${info.current} €</p></div></div></div>`;
+                container.innerHTML += `
+                    <div class="bg-white rounded-xl shadow-sm border p-4" style="background:${col}; border-color:${border}">
+                        <div class="flex justify-between font-bold" style="color:${border}"><span>${a.name}</span><i class="fa-solid fa-coins"></i></div>
+                        <div class="mt-4 flex justify-between items-end">
+                            <div><p class="text-xs text-gray-500">Revenu Est.</p><p class="text-xl font-bold text-emerald-700">${total.toFixed(2)} €</p></div>
+                            <div class="text-right"><p class="text-xs text-gray-500">Unit.</p><p class="font-mono">${info.current} €</p></div>
+                        </div>
+                    </div>`;
             }
         });
         if(!found) document.getElementById('noDividends')?.classList.remove('hidden');
@@ -381,7 +491,8 @@ const app = {
     openModal: function(mode, id=null) {
         document.getElementById('modalForm').classList.remove('hidden');
         document.getElementById('editIndex').value = id !== null ? id : '';
-        document.getElementById('modalTitle').textContent = mode==='new' ? 'Nouvelle Transaction' : 'Modifier';
+        document.getElementById('modalTitle').textContent = mode==='new' ? 'Nouvelle Transaction' : 'Modifier Transaction';
+        
         if(mode==='new') {
             document.getElementById('fDate').value = new Date().toISOString().split('T')[0];
             ['fName','fTicker','fAccount','fSector','fQty','fPrice'].forEach(id => document.getElementById(id).value = '');
@@ -416,7 +527,9 @@ const app = {
             price: parseFloat(document.getElementById('fPrice').value)||0
         };
         await this.addTransaction(tx);
-        this.closeModal(); this.toast("Sauvegardé"); this.renderTable();
+        this.closeModal(); 
+        this.toast("Sauvegardé"); 
+        this.renderTable();
     },
 
     deleteTx: async function(id) { 
@@ -427,7 +540,7 @@ const app = {
         } 
     },
     
-    // --- IMPORT AUTO-FILL TICKER ---
+    // --- GESTION IMPORT FICHIER AVEC AUTO-TICKER ---
     handleImport: async function(e) {
         const r = new FileReader();
         r.onload = async ev => {
@@ -435,15 +548,20 @@ const app = {
                 const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
                 const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
                 let count = 0;
+                
                 for(const row of json) {
                     let d = row['Date']||row['Date_Entrée'];
                     if(typeof d==='number') d = new Date(Math.round((d-25569)*86400*1000)).toISOString().split('T')[0];
                     
+                    // Tentative de détection du Ticker
                     let detectedTicker = row['Ticker'] || '';
                     if (!detectedTicker) {
                         const lowerName = (row['Nom actif'] || '').toLowerCase();
                         for (const [key, ticker] of Object.entries(this.tickerDB)) {
-                            if (lowerName.includes(key)) { detectedTicker = ticker; break; }
+                            if (lowerName.includes(key)) {
+                                detectedTicker = ticker;
+                                break;
+                            }
                         }
                     }
 
@@ -472,16 +590,24 @@ const app = {
         XLSX.writeFile(wb, "InvestTrack_Export.xlsx");
     },
     
-    // --- AUTO-FILL MANUEL ---
+    // --- GESTION AUTO-FILL MANUEL ---
     setupAutoFill: function() {
         const el = document.getElementById('fName');
         if(el) {
             el.addEventListener('blur', (e) => {
                 const val = e.target.value.toLowerCase().trim();
                 const tickerInput = document.getElementById('fTicker');
+                
+                // Ne rien faire si l'utilisateur a déjà rempli
                 if(tickerInput.value !== '') return;
+
+                // Recherche
                 for(const [k,t] of Object.entries(this.tickerDB)) { 
-                    if(val.includes(k)) { tickerInput.value=t; this.toast(`Ticker: ${t}`); break; }
+                    if(val.includes(k)) { 
+                        tickerInput.value = t; 
+                        this.toast(`Ticker trouvé : ${t}`);
+                        break; 
+                    }
                 }
             });
         }
@@ -509,14 +635,17 @@ const BudgetApp = () => {
     const [transactions, setTransactions] = useState([]);
     const [view, setView] = useState('dashboard'); 
     const [filterYear, setFilterYear] = useState('Tout'); 
+    
     const barRef = useRef(null);
     const pieRef = useRef(null);
 
+    // Chargement Données
     useEffect(() => {
         const load = async () => {
             try {
                 await dbService.init();
                 const data = await dbService.getAll('budget');
+                // Sécurisation des données
                 const safeData = (data || []).map(t => ({
                     ...t,
                     date: t.date || new Date().toISOString().split('T')[0],
@@ -525,34 +654,49 @@ const BudgetApp = () => {
                     category: t.category || 'Autre'
                 }));
                 setTransactions(safeData.sort((a,b) => new Date(b.date) - new Date(a.date)));
-            } catch (e) { console.error("Err Budget Load", e); }
+            } catch (e) {
+                console.error("Erreur chargement budget:", e);
+            }
         };
         load();
         window.addEventListener('budget-update', load);
         return () => window.removeEventListener('budget-update', load);
     }, []);
 
+    // Calcul Stats Dashboard
     const getStats = () => {
         const now = new Date();
         const currentM = now.getMonth(), currentY = now.getFullYear();
+        
         const currentTx = transactions.filter(t => { 
             const d = new Date(t.date); 
             return d.getMonth()===currentM && d.getFullYear()===currentY; 
         });
+
         const merchants = {};
         currentTx.forEach(t => { if(t.amount < 0) merchants[t.description] = (merchants[t.description]||0) + Math.abs(t.amount); });
         const top5 = Object.entries(merchants).sort((a,b) => b[1]-a[1]).slice(0,5);
+
         const cats = {};
         currentTx.forEach(t => { if(t.amount < 0) cats[t.category] = (cats[t.category]||0) + Math.abs(t.amount); });
+
         const sixM = {};
         for(let i=5; i>=0; i--) { const d = new Date(now.getFullYear(), now.getMonth()-i, 1); sixM[`${d.getMonth()+1}/${d.getFullYear()}`] = 0; }
-        transactions.forEach(t => { if(t.amount < 0) { const d = new Date(t.date); const k = `${d.getMonth()+1}/${d.getFullYear()}`; if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount); } });
+        transactions.forEach(t => { 
+            if(t.amount < 0) { 
+                const d = new Date(t.date); 
+                const k = `${d.getMonth()+1}/${d.getFullYear()}`; 
+                if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount); 
+            } 
+        });
         return { currentTx, top5, cats, sixM };
     };
 
+    // Graphiques
     useEffect(() => {
         if(view !== 'dashboard') return;
         const { cats, sixM } = getStats();
+        
         const timer = setTimeout(() => {
             if(pieRef.current) {
                 if(window.bPie) window.bPie.destroy();
@@ -568,10 +712,12 @@ const BudgetApp = () => {
         return () => clearTimeout(timer);
     }, [transactions, view]);
 
+    // Actions
     const addManual = async () => { await dbService.add('budget', { id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Dépense manuelle", amount: -10, category: "Autre" }); window.dispatchEvent(new Event('budget-update')); };
     const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add('budget', {...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
     const deleteTx = async (id) => { if(confirm("Supprimer ?")) { await dbService.delete('budget', id); window.dispatchEvent(new Event('budget-update')); } };
     
+    // Filtres Historique
     const availableYears = React.useMemo(() => {
         try {
             const years = new Set(transactions.map(t => (t.date ? String(t.date).substring(0,4) : '2024')));
@@ -595,7 +741,9 @@ const BudgetApp = () => {
                 </div>
                 <button onClick={addManual} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">+ Manuel</button>
             </div>
+
             <div className="flex-1 overflow-y-auto px-4 pb-24" style={{ height: 'calc(100vh - 180px)' }}>
+                
                 {view === 'dashboard' && (
                     <div className="space-y-6 animate-fade-in pb-10">
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
@@ -617,6 +765,7 @@ const BudgetApp = () => {
                         </div>
                     </div>
                 )}
+
                 {view === 'list' && (
                     <div className="space-y-4 animate-fade-in pb-10">
                         <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
@@ -625,8 +774,13 @@ const BudgetApp = () => {
                             ))}
                         </div>
                         <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between"><span>{filterYear}</span><span>{filteredList.length} lignes</span></h3>
-                            {filteredList.length === 0 ? (<div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée.</p></div>) : (
+                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between">
+                                <span>{filterYear === 'Tout' ? 'Tout' : filterYear}</span>
+                                <span>{filteredList.length} lignes</span>
+                            </h3>
+                            {filteredList.length === 0 ? (
+                                <div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée.</p></div>
+                            ) : (
                                 filteredList.map(t => (
                                     <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2">
                                         <div className="flex justify-between items-center gap-2">
@@ -636,7 +790,9 @@ const BudgetApp = () => {
                                         <div className="flex justify-between items-center text-xs">
                                             <div className="flex gap-2 items-center flex-wrap">
                                                 <input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-gray-400 bg-transparent border-none p-0" />
-                                                <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 outline-none">{Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                                <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 outline-none">
+                                                    {Object.keys(CATEGORIES).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}
+                                                </select>
                                             </div>
                                             <button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500 px-2"><i className="fa-solid fa-trash"></i></button>
                                         </div>
@@ -652,21 +808,32 @@ const BudgetApp = () => {
 };
 
 // =================================================================
-// 3. IA MODULE (PDF/IMG)
+// 3. SMART PDF/IMAGE IMPORTER (MODULE IA)
 // =================================================================
 const pdfImporter = {
-    apiKey: '', fileBase64: '', currentMimeType: '', extracted: [], usableModels: [],
+    apiKey: '',
+    fileBase64: '',
+    currentMimeType: '',
+    extracted: [],
+    usableModels: [],
+
     open: function() { document.getElementById('pdf-modal-overlay').classList.remove('hidden'); },
     close: function() { document.getElementById('pdf-modal-overlay').classList.add('hidden'); },
+
     log: function(msg, type='info') {
         const c = document.getElementById('ai-console');
         if(!c) return;
         const color = type==='success'?'text-green-400':(type==='error'?'text-red-400':(type==='warn'?'text-yellow-400':'text-slate-300'));
-        c.innerHTML += `<div class="mb-1 ${color}">> ${msg}</div>`; c.parentElement.scrollTop = c.parentElement.scrollHeight;
+        c.innerHTML += `<div class="mb-1 ${color}">> ${msg}</div>`;
+        c.parentElement.scrollTop = c.parentElement.scrollHeight;
     },
+
     verifyKey: async function() {
         const key = document.getElementById('gemini-key').value.trim();
+        const btn = document.getElementById('btn-verify-key');
         if(!key) return;
+        btn.innerText = '...'; btn.disabled = true;
+
         try {
             const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
             const data = await r.json();
@@ -675,8 +842,13 @@ const pdfImporter = {
             this.apiKey = key;
             document.getElementById('gemini-status').innerHTML = `<span class="text-green-600 font-bold">✅ Prêt</span>`;
             document.getElementById('ai-step-2').classList.remove('hidden');
-        } catch(e) { document.getElementById('gemini-status').innerHTML = `<span class="text-red-600 font-bold">❌ ${e.message}</span>`; }
+        } catch(e) {
+            document.getElementById('gemini-status').innerHTML = `<span class="text-red-600 font-bold">❌ ${e.message}</span>`;
+        } finally {
+            btn.innerText = 'Vérifier'; btn.disabled = false;
+        }
     },
+
     handleFile: function(e) {
         const file = e.target.files[0];
         if(!file) return;
@@ -687,42 +859,69 @@ const pdfImporter = {
         reader.onload = (evt) => this.fileBase64 = evt.target.result.split(',')[1];
         reader.readAsDataURL(file);
     },
+
     processAuto: async function() {
         if(!this.apiKey || !this.fileBase64) return;
         document.getElementById('ai-step-3').classList.add('hidden');
         document.getElementById('ai-logs-container').classList.remove('hidden');
+        document.getElementById('ai-console').innerHTML = '';
         this.log("Analyse IA...");
+
         const prompt = `Extrais TOUTES les transactions. JSON STRICT Array: [{"date":"YYYY-MM-DD","description":"Nom","amount":-10.00,"category":"Autre"}]. IMPORTANT: Les dépenses doivent avoir un montant NÉGATIF.`;
-        try {
-            const model = this.usableModels[0] || {id: 'gemini-1.5-flash'};
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${this.apiKey}`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: this.currentMimeType, data: this.fileBase64 } }] }] })
-            });
-            const d = await res.json();
-            let raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const match = raw.match(/\[[\s\S]*\]/);
-            if(match) raw = match[0];
-            const json = JSON.parse(raw);
-            this.extracted = Array.isArray(json) ? json : [json];
-            this.log(`Succès ! ${this.extracted.length} lignes.`, 'success');
-            this.renderPreview();
-        } catch(e) { this.log(`Erreur: ${e.message}`, 'error'); }
+        let success = false;
+
+        for(const model of this.usableModels) {
+            this.log(`Tentative avec ${model.name}...`);
+            try {
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: this.currentMimeType, data: this.fileBase64 } }] }],
+                    generationConfig: { temperature: 0.1, response_mime_type: "application/json" },
+                };
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${this.apiKey}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+                });
+
+                if(!res.ok) throw new Error(res.statusText);
+                const d = await res.json();
+                let raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                const match = raw.match(/\[[\s\S]*\]/);
+                if(match) raw = match[0];
+                const json = JSON.parse(raw);
+                this.extracted = Array.isArray(json) ? json : [json];
+                this.log(`Succès ! ${this.extracted.length} éléments.`, 'success');
+                this.renderPreview();
+                success = true;
+                break; 
+            } catch(e) { this.log(`Erreur: ${e.message}`, 'error'); }
+        }
+        if(!success) alert("Impossible d'extraire les données.");
     },
+
     renderPreview: function() {
         const t = document.getElementById('ai-preview-table');
         document.getElementById('ai-count').innerText = `${this.extracted.length} lignes`;
-        t.innerHTML = this.extracted.slice(0,10).map(r => `<tr class="border-b"><td class="p-2 text-xs">${r.date}</td><td class="p-2 text-xs truncate max-w-[100px]">${r.description}</td><td class="p-2 text-xs text-right font-bold">${r.amount}</td></tr>`).join('');
+        t.innerHTML = this.extracted.slice(0,10).map(r => 
+            `<tr class="border-b"><td class="p-2 text-xs">${r.date}</td><td class="p-2 text-xs truncate max-w-[100px]">${r.description}</td><td class="p-2 text-xs text-right font-bold">${r.amount}</td></tr>`
+        ).join('') + (this.extracted.length>10 ? '<tr><td colspan="3" class="p-2 text-center italic text-xs">... et autres</td></tr>' : '');
         document.getElementById('ai-step-3').classList.remove('hidden');
     },
+
     importToBudget: async function() {
         await dbService.init();
         let count = 0;
         for(const item of this.extracted) {
-            await dbService.add('budget', { id: Date.now()+Math.random(), date: item.date||new Date().toISOString().split('T')[0], description: item.description||'IA', amount: parseFloat(item.amount)||0, category: item.category||'Import' });
+            await dbService.add('budget', {
+                id: Date.now() + Math.random(),
+                date: item.date || new Date().toISOString().split('T')[0],
+                description: item.description || 'Import IA',
+                amount: parseFloat(item.amount) || 0,
+                category: item.category || 'Import'
+            });
             count++;
         }
-        this.close(); window.dispatchEvent(new Event('budget-update')); alert(`${count} importés !`);
+        this.close();
+        window.dispatchEvent(new Event('budget-update'));
+        alert(`${count} transactions importées !`);
     }
 };
 
@@ -739,14 +938,21 @@ const infoModule = {
         const btn = document.querySelector('#info-remote-v');
         if(!bg && btn) btn.innerText = '...';
         return fetch(`https://api.github.com/repos/${this.config.username}/${this.config.repo}/commits?per_page=1`)
-            .then(r => r.json()).then(d => {
+            .then(r => r.json())
+            .then(d => {
                 if(d && d[0]) {
                     const sha = d[0].sha;
                     if(document.getElementById('info-remote-v')) document.getElementById('info-remote-v').innerText = sha.substring(0,7);
-                    if(localStorage.getItem('app_version_hash') !== sha) { document.getElementById('navUpdateDot')?.classList.remove('hidden'); document.getElementById('refreshUpdateDot')?.classList.remove('hidden'); }
+                    const local = localStorage.getItem('app_version_hash');
+                    if(local && local !== sha) { 
+                        document.getElementById('navUpdateDot')?.classList.remove('hidden'); 
+                        document.getElementById('refreshUpdateDot')?.classList.remove('hidden'); 
+                    }
+                    if(!local) localStorage.setItem('app_version_hash', sha);
                     return sha;
                 }
-            }).catch(e => { if(!bg && btn) btn.innerText = 'Err'; });
+            })
+            .catch(e => { if(!bg && btn) btn.innerText = 'Err'; });
     },
     forceUpdate: function() {
         const btn = document.getElementById('refreshBtn');
@@ -756,23 +962,36 @@ const infoModule = {
 };
 
 // =================================================================
-// 5. BOOTSTRAP (INITIALISATION)
+// 5. BOOTSTRAP (INITIALISATION IMMÉDIATE)
 // =================================================================
+// Initialisation Directe (Pour contourner Babel latency)
 const bootstrap = () => {
-    console.log("Bootstrap...");
+    console.log("Bootstrap Application Complete...");
+    
+    // Globals
     window.app = app;
     window.infoModule = infoModule;
     window.pdfImporter = pdfImporter;
     
+    // Init Modules Vanilla
     app.init();
     infoModule.init();
     
+    // Init React
     const rootEl = document.getElementById('budget-root');
     if(rootEl) {
-        try { ReactDOM.createRoot(rootEl).render(<BudgetApp />); } 
-        catch(e) { console.error("React Error", e); }
+        try {
+            const root = ReactDOM.createRoot(rootEl);
+            root.render(<BudgetApp />);
+            console.log("React monté.");
+        } catch(e) {
+            console.error("Erreur React:", e);
+        }
     }
+    
+    // Icons
     if(window.lucide) lucide.createIcons();
 };
 
+// Appel immédiat
 bootstrap();
