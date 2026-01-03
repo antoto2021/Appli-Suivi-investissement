@@ -104,7 +104,7 @@ const app = {
     
     // MINI BDD : LISTE DES TICKERS (MODIFIABLE ICI)
     tickerDB: {
-        // CAC 40 & SBF 120
+        // CAC 40 & Europe
         'total': 'TTE.PA',
         'vinci': 'DG.PA',
         'air liquide': 'AI.PA',
@@ -121,7 +121,8 @@ const app = {
         'renault': 'RNO.PA',
         'stellantis': 'STLAP.PA',
         'neurones': 'NRO',        
-        'accor': 'AC',           
+        'accor': 'AC',
+        'mercedes': 'MBG',
 
         // US & TECH
         'apple': 'AAPL',
@@ -138,14 +139,19 @@ const app = {
         'cw8': 'CW8.PA',        
         'sp500': 'SPX',       
         'nasdaq': 'NDX',      
-        // CORRECTION ICI : On raccourcit la clé pour qu'elle soit détectée plus facilement
         'physical gold': 'IGLN', 
         'ishares gold': 'IGLN',  // Ajout d'une variante pour être sûr
         'gold etc': 'IGLN',      // Ajout d'une autre variante
-
-        // Autres
-        'CGM': 'GMF',            
-        'mercedes': 'MBG',  
+        
+        //NON COTÉ & CRYPTO
+        // On invente des codes (Tickers) pour que le prix manuel fonctionne
+        'CGM': 'GMF',
+        'la premiere brique': 'LPB', // Code inventé LPB
+        'la premier': 'LPB',         // Variante vue sur votre relevé (MGP*La Premier)
+        'mgp*la premier': 'LPB',     // Variante exacte du relevé
+        'bricks': 'BRICKS',
+        'bitstack': 'BTC',           // On associe Bitstack au Bitcoin par défaut
+        'bitcoin': 'BTC',
     },
     
     mockDividends: {
