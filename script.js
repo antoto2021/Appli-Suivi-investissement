@@ -1,66 +1,98 @@
 /**
- * INVEST TRACK V5 - CORE LOGIC (COMPLETE & AI ENHANCED)
+ * INVEST TRACK V5 - ROBUST STORAGE EDITION
+ * Unified IndexedDB for both Budget & Investments
  */
 
 const { useState, useEffect, useRef } = React;
 
 // =================================================================
-// 0. SERVICE DE BASE DE DONNÉES (IndexedDB)
+// 0. SERVICE DE BASE DE DONNÉES UNIFIÉ (IndexedDB V2)
 // =================================================================
 const dbService = {
     dbName: 'InvestTrackDB',
-    storeName: 'budget',
-    version: 1,
+    version: 2, // Montée de version pour forcer la mise à jour de la structure
     db: null,
 
     async init() {
         if (this.db) return this.db;
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(this.dbName, this.version);
+            
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
-                if (!db.objectStoreNames.contains(this.storeName)) {
-                    db.createObjectStore(this.storeName, { keyPath: 'id' });
+                // Store Budget
+                if (!db.objectStoreNames.contains('budget')) {
+                    db.createObjectStore('budget', { keyPath: 'id' });
+                }
+                // Store Bourse - Transactions
+                if (!db.objectStoreNames.contains('invest_tx')) {
+                    const store = db.createObjectStore('invest_tx', { keyPath: 'id', autoIncrement: true });
+                    store.createIndex('date', 'date', { unique: false });
+                }
+                // Store Bourse - Prix
+                if (!db.objectStoreNames.contains('invest_prices')) {
+                    db.createObjectStore('invest_prices', { keyPath: 'ticker' });
                 }
             };
+
             req.onsuccess = (e) => {
                 this.db = e.target.result;
+                console.log("DB Connectée ✅");
                 resolve(this.db);
             };
-            req.onerror = (e) => reject("DB Error: " + e.target.error);
+            req.onerror = (e) => {
+                console.error("DB Erreur", e);
+                reject("DB Error: " + e.target.error);
+            };
         });
     },
 
-    async getAll() {
+    // Méthodes Génériques CRUD
+    async getAll(storeName) {
         await this.init();
         return new Promise((resolve) => {
-            const tx = this.db.transaction(this.storeName, 'readonly');
-            const req = tx.objectStore(this.storeName).getAll();
+            const tx = this.db.transaction(storeName, 'readonly');
+            const req = tx.objectStore(storeName).getAll();
             req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
         });
     },
 
-    async add(item) {
+    async add(storeName, item) {
+        await this.init();
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(storeName, 'readwrite');
+            const store = tx.objectStore(storeName);
+            // Si pas d'ID sur le budget, on en met un
+            if(storeName === 'budget' && !item.id) item.id = Date.now();
+            
+            store.put(item);
+            tx.oncomplete = () => resolve(item);
+            tx.onerror = (e) => reject(e);
+        });
+    },
+
+    async delete(storeName, id) {
         await this.init();
         return new Promise((resolve) => {
-            const tx = this.db.transaction(this.storeName, 'readwrite');
-            tx.objectStore(this.storeName).put(item);
+            const tx = this.db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).delete(id);
             tx.oncomplete = () => resolve();
         });
     },
 
-    async delete(id) {
+    async clear(storeName) {
         await this.init();
-        return new Promise((resolve) => {
-            const tx = this.db.transaction(this.storeName, 'readwrite');
-            tx.objectStore(this.storeName).delete(id);
+        return new Promise(resolve => {
+            const tx = this.db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).clear();
             tx.oncomplete = () => resolve();
         });
     }
 };
 
 // =================================================================
-// 1. MODULE INVESTISSEMENT (Vanilla JS)
+// 1. MODULE INVESTISSEMENT (Vanilla JS - Migré vers IndexedDB)
 // =================================================================
 const app = {
     transactions: [],
@@ -81,8 +113,9 @@ const app = {
 
     tips: ["Diversifiez !", "Intérêts composés = Magie.", "Patience est mère de vertu.", "Achetez la peur."],
 
-    init: function() {
-        this.loadData();
+    init: async function() {
+        console.log("Initialisation App...");
+        await this.loadData(); // Chargement asynchrone DB
         this.loadDailyTip();
         this.setupAutoFill();
         this.nav('home');
@@ -93,7 +126,6 @@ const app = {
         const target = document.getElementById(id + '-view');
         if(target) target.classList.remove('hidden');
         
-        // Rafraîchissement des données selon la vue
         if(id === 'dashboard') { this.calcKPIs(); setTimeout(() => this.renderPie(), 100); }
         if(id === 'assets') this.renderAssets();
         if(id === 'transactions') this.renderTable();
@@ -103,34 +135,59 @@ const app = {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
-    loadData: function() {
-        const tx = localStorage.getItem('invest_v5_tx');
-        if(tx) this.transactions = JSON.parse(tx);
-        else this.seedData();
+    loadData: async function() {
+        try {
+            // 1. Charger Transactions Bourse
+            const txData = await dbService.getAll('invest_tx');
+            if (txData.length > 0) {
+                this.transactions = txData;
+            } else {
+                console.log("Aucune donnée, injection Seed Data...");
+                await this.seedData();
+            }
 
-        const pr = localStorage.getItem('invest_v5_prices');
-        if(pr) this.currentPrices = JSON.parse(pr);
+            // 2. Charger Prix
+            const priceData = await dbService.getAll('invest_prices');
+            priceData.forEach(p => this.currentPrices[p.ticker] = p.price);
+            
+            console.log("Données chargées:", this.transactions.length, "transactions");
+        } catch (e) {
+            console.error("Erreur chargement données:", e);
+        }
     },
 
-    saveData: function() {
-        localStorage.setItem('invest_v5_tx', JSON.stringify(this.transactions));
-        localStorage.setItem('invest_v5_prices', JSON.stringify(this.currentPrices));
-    },
-
-    seedData: function() {
-        this.transactions = [
-            {date:'2024-01-31', op:'Achat', name:'Action Vinci', account:'PEA', qty:15, price:93.53, sector:'Industrie'},
-            {date:'2024-11-12', op:'Achat', name:'Total Energie', account:'CTO', qty:5, price:60.32, sector:'Energie'}
+    seedData: async function() {
+        // Données d'exemple si DB vide
+        const seeds = [
+            {date:'2024-01-31', op:'Achat', name:'Action Vinci', account:'PEA', qty:15, price:93.53, sector:'Industrie', ticker:'DG.PA'},
+            {date:'2024-11-12', op:'Achat', name:'Total Energie', account:'CTO', qty:5, price:60.32, sector:'Energie', ticker:'TTE.PA'}
         ];
-        this.transactions.forEach(t => { if(t.op==='Achat') this.currentPrices[t.name] = t.price; });
-        this.saveData();
+        
+        for(const s of seeds) {
+            await this.addTransaction(s);
+            if(s.op === 'Achat') await this.updatePrice(s.name, s.price, s.ticker);
+        }
     },
 
-    updatePrice: function(name, price) {
-        this.currentPrices[name] = parseFloat(price);
-        this.saveData();
+    // Nouvelle fonction centrale pour ajouter/sauvegarder une transaction
+    addTransaction: async function(tx) {
+        if(!tx.id) tx.id = Date.now() + Math.random(); // ID unique
+        await dbService.add('invest_tx', tx);
+        // Mettre à jour la copie locale
+        const idx = this.transactions.findIndex(t => t.id === tx.id);
+        if(idx >= 0) this.transactions[idx] = tx;
+        else this.transactions.push(tx);
+    },
+
+    async updatePrice(name, price, ticker=null) {
+        const val = parseFloat(price);
+        this.currentPrices[name] = val;
+        // Sauvegarde DB
+        const key = ticker || name;
+        await dbService.add('invest_prices', { ticker: key, price: val });
+        
         this.renderAssets();
-        this.toast("Prix mis à jour");
+        this.toast("Prix sauvegardé");
     },
 
     getPortfolio: function() {
@@ -270,7 +327,7 @@ const app = {
                     <div class="p-5">
                         <div class="flex justify-between items-center mb-3">
                             <span class="text-gray-500 text-xs font-bold uppercase">Cours Actuel</span>
-                            <input type="number" step="0.01" value="${curr.toFixed(2)}" onchange="app.updatePrice('${a.name}', this.value)" class="price-input">
+                            <input type="number" step="0.01" value="${curr.toFixed(2)}" onchange="app.updatePrice('${a.name}', this.value, '${a.ticker}')" class="price-input">
                         </div>
                         <div class="flex justify-between mb-1"><span class="text-gray-500 text-xs">PRU</span><span class="font-mono text-gray-600">${pru.toFixed(2)} €</span></div>
                         <div class="flex justify-between items-end">
@@ -295,10 +352,11 @@ const app = {
         }
 
         sorted.forEach(tx => {
-            const idx = this.transactions.indexOf(tx);
+            // On utilise l'ID pour identifier, pas l'index
             const total = tx.op==='Dividende' ? tx.price : (tx.qty*tx.price);
             const badge = tx.op==='Achat'?'bg-blue-100 text-blue-800':(tx.op==='Vente'?'bg-red-100 text-red-800':'bg-emerald-100 text-emerald-800');
             
+            // Note: onclick passe l'ID
             tbody.innerHTML += `
                 <tr class="bg-white border-b hover:bg-gray-50 transition">
                     <td class="px-4 py-3 font-mono text-xs">${tx.date}</td>
@@ -309,8 +367,8 @@ const app = {
                     <td class="px-4 py-3 text-right font-mono text-xs">${tx.price.toFixed(2)}</td>
                     <td class="px-4 py-3 text-right font-bold text-gray-700">${total.toFixed(2)} €</td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="app.openModal('edit', ${idx})" class="text-blue-500 hover:text-blue-700 mx-1"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="app.deleteTx(${idx})" class="text-red-400 hover:text-red-600 mx-1"><i class="fa-solid fa-trash"></i></button>
+                        <button onclick="app.openModal('edit', ${tx.id})" class="text-blue-500 hover:text-blue-700 mx-1"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="app.deleteTx(${tx.id})" class="text-red-400 hover:text-red-600 mx-1"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 </tr>`;
         });
@@ -345,31 +403,39 @@ const app = {
             document.getElementById('noDividends').classList.remove('hidden');
     },
 
-    openModal: function(mode, idx=null) {
+    openModal: function(mode, id=null) {
         document.getElementById('modalForm').classList.remove('hidden');
-        document.getElementById('editIndex').value = idx !== null ? idx : '';
+        document.getElementById('editIndex').value = id !== null ? id : ''; // Now stores ID
         document.getElementById('modalTitle').textContent = mode==='new' ? 'Nouvelle Transaction' : 'Modifier Transaction';
+        
         if(mode==='new') {
             document.getElementById('fDate').value = new Date().toISOString().split('T')[0];
-            ['fName','fTicker','fAccount','fSector','fQty','fPrice'].forEach(id => document.getElementById(id).value = '');
+            ['fName','fTicker','fAccount','fSector','fQty','fPrice'].forEach(eid => document.getElementById(eid).value = '');
             document.getElementById('fOp').value = 'Achat';
         } else {
-            const tx = this.transactions[idx];
-            document.getElementById('fDate').value = tx.date;
-            document.getElementById('fOp').value = tx.op;
-            document.getElementById('fName').value = tx.name;
-            document.getElementById('fTicker').value = tx.ticker||'';
-            document.getElementById('fAccount').value = tx.account||'';
-            document.getElementById('fSector').value = tx.sector||'';
-            document.getElementById('fQty').value = tx.qty;
-            document.getElementById('fPrice').value = tx.price;
+            // Find by ID
+            const tx = this.transactions.find(t => t.id == id);
+            if(tx) {
+                document.getElementById('fDate').value = tx.date;
+                document.getElementById('fOp').value = tx.op;
+                document.getElementById('fName').value = tx.name;
+                document.getElementById('fTicker').value = tx.ticker||'';
+                document.getElementById('fAccount').value = tx.account||'';
+                document.getElementById('fSector').value = tx.sector||'';
+                document.getElementById('fQty').value = tx.qty;
+                document.getElementById('fPrice').value = tx.price;
+            }
         }
     },
     closeModal: function() { document.getElementById('modalForm').classList.add('hidden'); },
     
-    saveTransaction: function() {
-        const idx = document.getElementById('editIndex').value;
+    saveTransaction: async function() {
+        const idVal = document.getElementById('editIndex').value;
+        // Si idVal existe, c'est une modif, on garde l'ID, sinon on laisse undefined pour que addTransaction le crée
+        const id = idVal ? parseFloat(idVal) : null; 
+        
         const tx = {
+            id: id,
             date: document.getElementById('fDate').value,
             op: document.getElementById('fOp').value,
             name: document.getElementById('fName').value,
@@ -379,30 +445,49 @@ const app = {
             qty: parseFloat(document.getElementById('fQty').value)||0,
             price: parseFloat(document.getElementById('fPrice').value)||0
         };
-        if(idx !== '') this.transactions[idx] = tx; else this.transactions.push(tx);
-        this.saveData(); this.closeModal(); this.toast(idx!==''?"Modifié":"Ajouté"); this.renderTable();
+        
+        await this.addTransaction(tx);
+        this.closeModal(); 
+        this.toast("Sauvegardé"); 
+        this.renderTable();
     },
-    deleteTx: function(idx) { if(confirm('Supprimer ?')) { this.transactions.splice(idx,1); this.saveData(); this.renderTable(); } },
+
+    deleteTx: async function(id) { 
+        if(confirm('Supprimer ?')) { 
+            await dbService.delete('invest_tx', id);
+            this.transactions = this.transactions.filter(t => t.id !== id);
+            this.renderTable(); 
+        } 
+    },
     
-    handleImport: function(e) {
+    handleImport: async function(e) {
         const r = new FileReader();
-        r.onload = ev => {
+        r.onload = async ev => {
             const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
             const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
             let count = 0;
-            json.forEach(row => {
+            
+            for(const row of json) {
                 let d = row['Date']||row['Date_Entrée'];
                 if(typeof d==='number') d = new Date(Math.round((d-25569)*86400*1000)).toISOString().split('T')[0];
+                
                 const tx = {
                     date: d || new Date().toISOString().split('T')[0],
                     op: row['Operation'] || 'Achat',
                     name: row['Nom actif'] || 'Inconnu',
                     qty: parseFloat(row['Quantité']) || 0,
-                    price: parseFloat(row['Prix unitaire']) || 0
+                    price: parseFloat(row['Prix unitaire']) || 0,
+                    account: row['Compte'] || '',
+                    ticker: row['Ticker'] || ''
                 };
-                if(tx.qty > 0) { this.transactions.push(tx); count++; }
-            });
-            this.saveData(); this.toast(`${count} importés`); this.renderTable(); e.target.value = '';
+                if(tx.qty > 0) { 
+                    await this.addTransaction(tx); 
+                    count++; 
+                }
+            }
+            this.toast(`${count} importés`); 
+            this.renderTable(); 
+            e.target.value = '';
         };
         r.readAsArrayBuffer(e.target.files[0]);
     },
@@ -428,7 +513,7 @@ const app = {
 };
 
 // =================================================================
-// 2. BUDGET SCAN APP (CORRIGÉE & SÉCURISÉE)
+// 2. BUDGET SCAN APP (REACT + CHARTS + ROBUST IDB)
 // =================================================================
 const CATEGORIES = {
     'Alimentation': ['carrefour', 'leclerc', 'auchan', 'lidl', 'courses'],
@@ -442,7 +527,7 @@ const CATEGORIES = {
 const BudgetApp = () => {
     const [transactions, setTransactions] = useState([]);
     const [view, setView] = useState('dashboard'); 
-    const [filterYear, setFilterYear] = useState('Tout'); // Par défaut 'Tout' pour être sûr de voir les données
+    const [filterYear, setFilterYear] = useState('Tout'); 
     
     const barRef = useRef(null);
     const pieRef = useRef(null);
@@ -451,12 +536,14 @@ const BudgetApp = () => {
     useEffect(() => {
         const load = async () => {
             try {
+                // On s'assure que DB est init
                 await dbService.init();
                 const data = await dbService.getAll('budget');
-                // Sécurisation des données brutes pour éviter le crash
+                
+                // Sécurisation des données brutes
                 const safeData = (data || []).map(t => ({
                     ...t,
-                    date: t.date || new Date().toISOString().split('T')[0], // Fallback date
+                    date: t.date || new Date().toISOString().split('T')[0],
                     amount: parseFloat(t.amount) || 0,
                     description: t.description || 'Inconnu',
                     category: t.category || 'Autre'
@@ -520,11 +607,11 @@ const BudgetApp = () => {
     }, [transactions, view]);
 
     // Actions
-    const addManual = async () => { await dbService.add({ id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Dépense manuelle", amount: -10, category: "Autre" }); window.dispatchEvent(new Event('budget-update')); };
-    const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add({...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
-    const deleteTx = async (id) => { if(confirm("Supprimer ?")) { await dbService.delete(id); window.dispatchEvent(new Event('budget-update')); } };
+    const addManual = async () => { await dbService.add('budget', { id: Date.now(), date: new Date().toISOString().split('T')[0], description: "Dépense manuelle", amount: -10, category: "Autre" }); window.dispatchEvent(new Event('budget-update')); };
+    const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add('budget', {...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
+    const deleteTx = async (id) => { if(confirm("Supprimer ?")) { await dbService.delete('budget', id); window.dispatchEvent(new Event('budget-update')); } };
     
-    // --- LOGIQUE SÉCURISÉE ---
+    // Filtres
     const availableYears = React.useMemo(() => {
         try {
             const years = new Set(transactions.map(t => (t.date ? String(t.date).substring(0,4) : '2024')));
@@ -541,7 +628,6 @@ const BudgetApp = () => {
 
     return (
         <div className="flex flex-col h-full bg-slate-50 relative">
-            {/* Header Fixe */}
             <div className="flex justify-between items-center p-4 bg-white shadow-sm mb-2 sticky top-0 z-20">
                 <div className="flex gap-2">
                     <button onClick={()=>setView('dashboard')} className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${view==='dashboard'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>Dashboard</button>
@@ -550,9 +636,7 @@ const BudgetApp = () => {
                 <button onClick={addManual} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">+ Manuel</button>
             </div>
 
-            {/* Zone de contenu avec hauteur forcée pour éviter le collapse CSS */}
             <div className="flex-1 overflow-y-auto px-4 pb-24" style={{ height: 'calc(100vh - 180px)' }}>
-                
                 {view === 'dashboard' && (
                     <div className="space-y-6 animate-fade-in pb-10">
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
@@ -574,7 +658,6 @@ const BudgetApp = () => {
                         </div>
                     </div>
                 )}
-
                 {view === 'list' && (
                     <div className="space-y-4 animate-fade-in pb-10">
                         <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
@@ -582,18 +665,13 @@ const BudgetApp = () => {
                                 <button key={y} onClick={() => setFilterYear(y)} className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterYear === y ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200'}`}>{y}</button>
                             ))}
                         </div>
-
                         <div className="space-y-2">
                             <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between">
                                 <span>{filterYear === 'Tout' ? 'Tout' : filterYear}</span>
                                 <span>{filteredList.length} lignes</span>
                             </h3>
-                            
                             {filteredList.length === 0 ? (
-                                <div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200">
-                                    <p className="text-sm text-gray-400">Aucune donnée.</p>
-                                    <button onClick={addManual} className="mt-2 text-emerald-600 text-xs font-bold underline">Créer une transaction</button>
-                                </div>
+                                <div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée.</p></div>
                             ) : (
                                 filteredList.map(t => (
                                     <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2">
@@ -622,7 +700,7 @@ const BudgetApp = () => {
 };
 
 // =================================================================
-// 3. SMART PDF/IMAGE IMPORTER (MODULE IA - CORRIGÉ & COMPLET)
+// 3. SMART PDF/IMAGE IMPORTER (MODULE IA)
 // =================================================================
 const pdfImporter = {
     apiKey: '',
@@ -767,7 +845,7 @@ const pdfImporter = {
         await dbService.init();
         let count = 0;
         for(const item of this.extracted) {
-            await dbService.add({
+            await dbService.add('budget', {
                 id: Date.now() + Math.random(),
                 date: item.date || new Date().toISOString().split('T')[0],
                 description: item.description || 'Import IA',
@@ -783,7 +861,7 @@ const pdfImporter = {
 };
 
 // =================================================================
-// 4. INFO MODULE (Updates + Storage)
+// 4. INFO MODULE
 // =================================================================
 const infoModule = {
     config: { username: 'antoto2021', repo: 'Suivi-investissement' },
