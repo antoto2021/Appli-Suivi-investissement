@@ -943,14 +943,13 @@ const BudgetApp = () => {
 };
 
 // =================================================================
-// 3. SMART PDF/IMAGE IMPORTER (MODULE IA)
+// 3. IA MODULE (PDF/IMG) - AVEC DÉTECTION ENSEIGNE & CATÉGORIES
 // =================================================================
-
 const pdfImporter = {
-    apiKey: '',
-    fileBase64: '',
-    currentMimeType: '',
-    extracted: [],
+    apiKey: '', 
+    fileBase64: '', 
+    currentMimeType: '', 
+    extracted: [], 
     usableModels: [],
 
     open: function() { document.getElementById('pdf-modal-overlay').classList.remove('hidden'); },
@@ -974,8 +973,10 @@ const pdfImporter = {
             const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
             const data = await r.json();
             if(!r.ok) throw new Error(data.error?.message || 'Clé invalide');
+
             this.usableModels = (data.models || []).filter(m => m.supportedGenerationMethods?.includes('generateContent'));
             this.apiKey = key;
+
             document.getElementById('gemini-status').innerHTML = `<span class="text-green-600 font-bold">✅ Prêt</span>`;
             document.getElementById('ai-step-2').classList.remove('hidden');
         } catch(e) {
@@ -998,66 +999,112 @@ const pdfImporter = {
 
     processAuto: async function() {
         if(!this.apiKey || !this.fileBase64) return;
+        
         document.getElementById('ai-step-3').classList.add('hidden');
         document.getElementById('ai-logs-container').classList.remove('hidden');
-        document.getElementById('ai-console').innerHTML = '';
-        this.log("Analyse IA...");
+        document.getElementById('ai-console').innerHTML = ''; // Clear logs
+        this.log("Analyse IA en cours...");
 
-        const prompt = `Extrais TOUTES les transactions. JSON STRICT Array: [{"date":"YYYY-MM-DD","description":"Nom","amount":-10.00,"category":"Autre"}]. IMPORTANT: Les dépenses doivent avoir un montant NÉGATIF.`;
-        let success = false;
+        // --- PROMPT AMÉLIORÉ ---
+        // On donne la liste des catégories valides à l'IA
+        const validCats = ['Alimentation', 'Restauration', 'Transport', 'Logement', 'Loisirs', 'Salaire', 'Investissement', 'Autre'];
+        
+        const prompt = `
+            Analyse ce document bancaire/facture. Extrais TOUTES les transactions.
+            
+            RÈGLES STRICTES :
+            1. Sortie UNIQUEMENT en JSON Array.
+            2. Format : [{"date":"YYYY-MM-DD", "description":"Libellé complet", "merchant":"Nom Enseigne Courte", "amount":-10.00, "category":"UneCategorieValide"}]
+            3. "merchant" : Extrais juste le nom de l'enseigne (ex: "McDonald's", "Total", "Leclerc"). Si pas clair, laisse vide.
+            4. "category" : Choisis OBLIGATOIREMENT parmi cette liste : ${validCats.join(', ')}.
+            5. "amount" : Les dépenses DOIVENT être en NÉGATIF (ex: -15.50). Les revenus en POSITIF.
+        `;
 
-        for(const model of this.usableModels) {
-            this.log(`Tentative avec ${model.name}...`);
-            try {
-                const payload = {
-                    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: this.currentMimeType, data: this.fileBase64 } }] }],
-                    generationConfig: { temperature: 0.1, response_mime_type: "application/json" },
-                };
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${this.apiKey}`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
-                });
+        try {
+            const model = this.usableModels[0] || {id: 'gemini-1.5-flash'};
+            
+            const payload = {
+                contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: this.currentMimeType, data: this.fileBase64 } }] }],
+                generationConfig: { temperature: 0.1, response_mime_type: "application/json" }
+            };
 
-                if(!res.ok) throw new Error(res.statusText);
-                const d = await res.json();
-                let raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                const match = raw.match(/\[[\s\S]*\]/);
-                if(match) raw = match[0];
-                const json = JSON.parse(raw);
-                this.extracted = Array.isArray(json) ? json : [json];
-                this.log(`Succès ! ${this.extracted.length} éléments.`, 'success');
-                this.renderPreview();
-                success = true;
-                break; 
-            } catch(e) { this.log(`Erreur: ${e.message}`, 'error'); }
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${this.apiKey}`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            });
+
+            if(!res.ok) throw new Error(res.statusText);
+
+            const d = await res.json();
+            let raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            
+            // Nettoyage Markdown éventuel
+            const match = raw.match(/\[[\s\S]*\]/);
+            if(match) raw = match[0];
+
+            const json = JSON.parse(raw);
+            this.extracted = Array.isArray(json) ? json : [json];
+
+            this.log(`Succès ! ${this.extracted.length} transactions trouvées.`, 'success');
+            this.renderPreview();
+
+        } catch(e) {
+            this.log(`Erreur: ${e.message}`, 'error');
         }
-        if(!success) alert("Impossible d'extraire les données.");
     },
 
     renderPreview: function() {
         const t = document.getElementById('ai-preview-table');
         document.getElementById('ai-count').innerText = `${this.extracted.length} lignes`;
-        t.innerHTML = this.extracted.slice(0,10).map(r => 
-            `<tr class="border-b"><td class="p-2 text-xs">${r.date}</td><td class="p-2 text-xs truncate max-w-[100px]">${r.description}</td><td class="p-2 text-xs text-right font-bold">${r.amount}</td></tr>`
-        ).join('') + (this.extracted.length>10 ? '<tr><td colspan="3" class="p-2 text-center italic text-xs">... et autres</td></tr>' : '');
+        
+        // On affiche aussi la colonne Enseigne dans l'aperçu
+        t.innerHTML = `
+            <thead>
+                <tr class="text-xs text-gray-400 border-b">
+                    <th class="p-2 text-left">Date</th>
+                    <th class="p-2 text-left">Enseigne</th>
+                    <th class="p-2 text-left">Catégorie</th>
+                    <th class="p-2 text-right">Montant</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${this.extracted.slice(0,10).map(r => `
+                    <tr class="border-b">
+                        <td class="p-2 text-xs">${r.date}</td>
+                        <td class="p-2 text-xs font-bold text-gray-700">${r.merchant || '-'}</td>
+                        <td class="p-2 text-xs text-gray-500">${r.category}</td>
+                        <td class="p-2 text-xs text-right font-mono ${r.amount<0?'text-slate-700':'text-emerald-600'}">${r.amount}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        `;
+        
+        if (this.extracted.length > 10) {
+            t.innerHTML += `<tr><td colspan="4" class="p-2 text-center italic text-xs">... et ${this.extracted.length - 10} autres</td></tr>`;
+        }
+
         document.getElementById('ai-step-3').classList.remove('hidden');
     },
 
     importToBudget: async function() {
+        if(!this.extracted.length) return;
         await dbService.init();
         let count = 0;
+        
         for(const item of this.extracted) {
             await dbService.add('budget', {
                 id: Date.now() + Math.random(),
                 date: item.date || new Date().toISOString().split('T')[0],
                 description: item.description || 'Import IA',
+                merchant: item.merchant || item.description || '', // On sauve l'enseigne !
                 amount: parseFloat(item.amount) || 0,
-                category: item.category || 'Import'
+                category: item.category || 'Autre'
             });
             count++;
         }
+        
         this.close();
         window.dispatchEvent(new Event('budget-update'));
-        alert(`${count} transactions importées !`);
+        alert(`${count} transactions importées avec succès !`);
     }
 };
 
