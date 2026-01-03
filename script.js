@@ -943,7 +943,7 @@ const BudgetApp = () => {
 };
 
 // =================================================================
-// 3. IA MODULE (PDF/IMG) - AVEC DÉTECTION ENSEIGNE & CATÉGORIES
+// 3. IA MODULE (PDF/IMG) - CORRECTIF SELECTION MODÈLES
 // =================================================================
 const pdfImporter = {
     apiKey: '', 
@@ -967,22 +967,47 @@ const pdfImporter = {
         const key = document.getElementById('gemini-key').value.trim();
         const btn = document.getElementById('btn-verify-key');
         if(!key) return;
-        btn.innerText = '...'; btn.disabled = true;
+        
+        btn.innerText = '...'; 
+        btn.disabled = true;
 
         try {
             const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
             const data = await r.json();
+            
             if(!r.ok) throw new Error(data.error?.message || 'Clé invalide');
 
-            this.usableModels = (data.models || []).filter(m => m.supportedGenerationMethods?.includes('generateContent'));
+            // Filtrer uniquement les modèles capables de générer du contenu
+            let models = (data.models || []).filter(m => m.supportedGenerationMethods?.includes('generateContent'));
+
+            // --- TRI INTELLIGENT ---
+            // On force Gemini 1.5 Flash en premier, puis Pro, et on relègue les modèles expérimentaux (robotics, etc.) à la fin
+            models.sort((a,b) => {
+                const getScore = (m) => {
+                    const n = (m.displayName || m.name).toLowerCase();
+                    if (n.includes('flash') && n.includes('1.5')) return 100; // Priorité Absolue
+                    if (n.includes('pro') && n.includes('1.5')) return 90;
+                    if (n.includes('gemini-pro')) return 80;
+                    return 0; // Les modèles expérimentaux auront 0
+                };
+                return getScore(b) - getScore(a);
+            });
+
+            if (models.length === 0) throw new Error("Aucun modèle compatible trouvé.");
+
+            this.usableModels = models;
             this.apiKey = key;
 
-            document.getElementById('gemini-status').innerHTML = `<span class="text-green-600 font-bold">✅ Prêt</span>`;
+            // Afficher le modèle qui sera utilisé pour rassurer
+            const bestModelName = this.usableModels[0].displayName || this.usableModels[0].name.split('/').pop();
+            document.getElementById('gemini-status').innerHTML = `<span class="text-green-600 font-bold">✅ Prêt (${bestModelName})</span>`;
             document.getElementById('ai-step-2').classList.remove('hidden');
+
         } catch(e) {
             document.getElementById('gemini-status').innerHTML = `<span class="text-red-600 font-bold">❌ ${e.message}</span>`;
         } finally {
-            btn.innerText = 'Vérifier'; btn.disabled = false;
+            btn.innerText = 'Vérifier'; 
+            btn.disabled = false;
         }
     },
 
@@ -992,6 +1017,7 @@ const pdfImporter = {
         this.currentMimeType = file.type;
         document.getElementById('ai-filename').innerText = file.name;
         document.getElementById('ai-file-info').classList.remove('hidden');
+        
         const reader = new FileReader();
         reader.onload = (evt) => this.fileBase64 = evt.target.result.split(',')[1];
         reader.readAsDataURL(file);
@@ -1002,53 +1028,72 @@ const pdfImporter = {
         
         document.getElementById('ai-step-3').classList.add('hidden');
         document.getElementById('ai-logs-container').classList.remove('hidden');
-        document.getElementById('ai-console').innerHTML = ''; // Clear logs
+        document.getElementById('ai-console').innerHTML = ''; 
         this.log("Analyse IA en cours...");
 
-        // --- PROMPT AMÉLIORÉ ---
-        // On donne la liste des catégories valides à l'IA
+        // Liste des catégories valides pour aider l'IA
         const validCats = ['Alimentation', 'Restauration', 'Transport', 'Logement', 'Loisirs', 'Salaire', 'Investissement', 'Autre'];
         
         const prompt = `
-            Analyse ce document bancaire/facture. Extrais TOUTES les transactions.
-            
-            RÈGLES STRICTES :
-            1. Sortie UNIQUEMENT en JSON Array.
-            2. Format : [{"date":"YYYY-MM-DD", "description":"Libellé complet", "merchant":"Nom Enseigne Courte", "amount":-10.00, "category":"UneCategorieValide"}]
-            3. "merchant" : Extrais juste le nom de l'enseigne (ex: "McDonald's", "Total", "Leclerc"). Si pas clair, laisse vide.
-            4. "category" : Choisis OBLIGATOIREMENT parmi cette liste : ${validCats.join(', ')}.
-            5. "amount" : Les dépenses DOIVENT être en NÉGATIF (ex: -15.50). Les revenus en POSITIF.
+            Analyse ce document. Extrais TOUTES les transactions.
+            RÈGLES :
+            1. JSON Array STRICT : [{"date":"YYYY-MM-DD", "description":"Libellé", "merchant":"Enseigne", "amount":-10.00, "category":"Autre"}]
+            2. "merchant" : Nom court de l'enseigne (ex: Uber, Leclerc).
+            3. "category" : Choisis parmi : ${validCats.join(', ')}.
+            4. Dépenses en NÉGATIF.
         `;
 
-        try {
-            const model = this.usableModels[0] || {id: 'gemini-1.5-flash'};
+        let success = false;
+
+        // Boucle sur les modèles triés (Flash en premier)
+        for(const model of this.usableModels) {
+            const modelName = model.name.split('/').pop();
+            this.log(`Tentative avec ${modelName}...`);
             
-            const payload = {
-                contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: this.currentMimeType, data: this.fileBase64 } }] }],
-                generationConfig: { temperature: 0.1, response_mime_type: "application/json" }
-            };
+            try {
+                // Endpoint standard
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.apiKey}`;
+                
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: this.currentMimeType, data: this.fileBase64 } }] }],
+                    generationConfig: { temperature: 0.1, response_mime_type: "application/json" }
+                };
 
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${this.apiKey}`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
-            });
+                const res = await fetch(url, {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify(payload)
+                });
 
-            if(!res.ok) throw new Error(res.statusText);
+                if(!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.error?.message || res.statusText);
+                }
 
-            const d = await res.json();
-            let raw = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            
-            // Nettoyage Markdown éventuel
-            const match = raw.match(/\[[\s\S]*\]/);
-            if(match) raw = match[0];
+                const d = await res.json();
+                if(!d.candidates || !d.candidates[0].content) throw new Error("Réponse vide.");
 
-            const json = JSON.parse(raw);
-            this.extracted = Array.isArray(json) ? json : [json];
+                let raw = d.candidates[0].content.parts[0].text;
+                const match = raw.match(/\[[\s\S]*\]/);
+                if(match) raw = match[0];
 
-            this.log(`Succès ! ${this.extracted.length} transactions trouvées.`, 'success');
-            this.renderPreview();
+                const json = JSON.parse(raw);
+                this.extracted = Array.isArray(json) ? json : [json];
 
-        } catch(e) {
-            this.log(`Erreur: ${e.message}`, 'error');
+                this.log(`Succès ! ${this.extracted.length} éléments trouvés.`, 'success');
+                this.renderPreview();
+                success = true;
+                break; // On sort de la boucle si ça marche
+
+            } catch(e) {
+                // Affichage détaillé de l'erreur
+                this.log(`Échec : ${e.message}`, 'error');
+            }
+        }
+
+        if(!success) {
+            this.log("Aucun modèle n'a réussi à lire l'image.", 'error');
+            alert("Impossible d'extraire les données. Vérifiez votre clé API ou le format de l'image.");
         }
     },
 
@@ -1056,7 +1101,6 @@ const pdfImporter = {
         const t = document.getElementById('ai-preview-table');
         document.getElementById('ai-count').innerText = `${this.extracted.length} lignes`;
         
-        // On affiche aussi la colonne Enseigne dans l'aperçu
         t.innerHTML = `
             <thead>
                 <tr class="text-xs text-gray-400 border-b">
@@ -1095,7 +1139,7 @@ const pdfImporter = {
                 id: Date.now() + Math.random(),
                 date: item.date || new Date().toISOString().split('T')[0],
                 description: item.description || 'Import IA',
-                merchant: item.merchant || item.description || '', // On sauve l'enseigne !
+                merchant: item.merchant || item.description || '',
                 amount: parseFloat(item.amount) || 0,
                 category: item.category || 'Autre'
             });
@@ -1104,7 +1148,7 @@ const pdfImporter = {
         
         this.close();
         window.dispatchEvent(new Event('budget-update'));
-        alert(`${count} transactions importées avec succès !`);
+        alert(`${count} transactions importées !`);
     }
 };
 
