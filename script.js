@@ -139,7 +139,7 @@ const app = {
         // CORRECTION ICI : On raccourcit la clé pour qu'elle soit détectée plus facilement
         'physical gold': 'IGLN', 
         'ishares gold': 'IGLN',  // Ajout d'une variante pour être sûr
-        'gold etc': 'IGLN'       // Ajout d'une autre variante
+        'gold etc': 'IGLN',      // Ajout d'une autre variante
 
         // Autres
         'CGM': 'GMF',            
