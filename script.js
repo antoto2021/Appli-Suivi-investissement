@@ -252,7 +252,7 @@ const app = {
         return assets;
     },
 
-    calcKPIs: function() {
+        calcKPIs: function() {
         const assets = this.getPortfolio();
         let invested = 0, currentVal = 0;
 
@@ -263,8 +263,25 @@ const app = {
             currentVal += (a.qty * price);
         });
 
+        // 1. Performance Cumulée Totale (Classique : Combien j'ai gagné au total ?)
         const diff = currentVal - invested;
-        const perf = invested > 0 ? (diff / invested) * 100 : 0;
+        const totalPerf = invested > 0 ? (diff / invested) * 100 : 0;
+
+        // 2. Taux de Rendement Annuel Moyen (CAGR : Vitesse de croissance par an)
+        let cagr = 0;
+        const dates = this.transactions.map(t => new Date(t.date).getTime());
+        if (dates.length > 0 && invested > 0 && currentVal > 0) {
+            const firstDate = Math.min(...dates);
+            const now = new Date().getTime();
+            const yearsElapsed = (now - firstDate) / (1000 * 60 * 60 * 24 * 365.25);
+            
+            // Formule CAGR : (ValeurFin / ValeurInit)^(1/n) - 1
+            if (yearsElapsed > 0.1) { 
+                cagr = (Math.pow(currentVal / invested, 1 / yearsElapsed) - 1) * 100;
+            } else {
+                cagr = totalPerf; // Si < 1 mois, approx
+            }
+        }
 
         // Mise à jour du DOM
         if(document.getElementById('kpiTotal')) {
@@ -275,11 +292,29 @@ const app = {
             diffEl.textContent = `${diff>=0?'+':''}${diff.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}`;
             diffEl.className = `sub-value ${diff>=0?'text-green-600':'text-red-500'}`;
             
+            // Affichage Perf Cumulée (Gros chiffre)
             const perfEl = document.getElementById('kpiReturn');
-            perfEl.textContent = `${perf>=0?'+':''}${perf.toFixed(2)} %`;
-            perfEl.className = `value ${perf>=0?'text-green-600':'text-red-500'}`;
+            perfEl.textContent = `${totalPerf>=0?'+':''}${totalPerf.toFixed(2)} %`;
+            perfEl.className = `value ${totalPerf>=0?'text-green-600':'text-red-500'}`;
+
+            // --- MODIF : Renommer le titre pour être clair ---
+            const labelEl = perfEl.previousElementSibling; 
+            if(labelEl && labelEl.classList.contains('label')) labelEl.textContent = "Perf. Cumulée Totale";
+
+            // --- AJOUT : Bulle Taux Annuel Moyen (CAGR) ---
+            let cagrEl = document.getElementById('kpiCagrBadge');
+            if (!cagrEl) {
+                cagrEl = document.createElement('div');
+                cagrEl.id = 'kpiCagrBadge';
+                perfEl.parentNode.insertBefore(cagrEl, perfEl.nextSibling); // Insérer sous le %
+            }
+            
+            const cagrColor = cagr >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800';
+            cagrEl.className = `mt-2 inline-block px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide ${cagrColor}`;
+            cagrEl.innerHTML = `Annuel Moy. : ${cagr>=0?'+':''}${cagr.toFixed(2)}%`;
         }
-        return { invested, currentVal };
+        
+        return { invested, currentVal, perf: totalPerf, cagr };
     },
 
     renderPie: function() {
@@ -372,7 +407,7 @@ const app = {
                 labels, 
                 datasets: [
                     { 
-                        label: `Trajectoire Portefeuille (Taux réel ${rateTxt})`, 
+                        label: `Trajectoire Portefeuille (Taux annuel moyen ${rateTxt})`, 
                         data: dataValue, 
                         borderColor: '#8b5cf6', // Violet
                         backgroundColor: 'rgba(139, 92, 246, 0.1)', 
@@ -429,18 +464,51 @@ const app = {
         });
     },
 
-    renderFrequency: function() {
-        const ctx = document.getElementById('frequencyChart')?.getContext('2d');
-        if(!ctx) return;
-        if(this.charts.freq) this.charts.freq.destroy();
+renderSectorChart: function() {
+        // Cible le nouvel ID 'sectorChart' (ou fallback sur l'ancien 'frequencyChart' si HTML pas jour)
+        const canvas = document.getElementById('sectorChart') || document.getElementById('frequencyChart');
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        // NETTOYAGE CRITIQUE : Vérifie et détruit toute instance existante sur ce canvas
+        // C'est souvent ce qui empêche le graphique de s'afficher lors d'un changement de type
+        const existingChart = Chart.getChart(canvas);
+        if (existingChart) existingChart.destroy();
         
-        let count = 0;
-        const sorted = [...this.transactions].sort((a,b)=>new Date(a.date)-new Date(b.date));
-        
-        this.charts.freq = new Chart(ctx, {
-            type: 'line',
-            data: { labels: sorted.map(t=>t.date), datasets: [{ label:'Opérations', data: sorted.map(t => ++count), borderColor:'#6366f1', pointRadius:0 }] },
-            options: { maintainAspectRatio: false, scales: { x: { display: false } } }
+        // Nettoyage des références internes
+        if(this.charts.sec) this.charts.sec = null;
+
+        // Calcul des données
+        const sectors = {};
+        this.transactions.filter(t => t.op === 'Achat').forEach(t => {
+            const s = t.sector || 'Autre';
+            sectors[s] = (sectors[s] || 0) + (t.qty * t.price);
+        });
+
+        // Si aucune donnée, on arrête
+        if (Object.keys(sectors).length === 0) return;
+
+        // Création du graphique
+        this.charts.sec = new Chart(ctx, {
+            type: 'polarArea',
+            data: { 
+                labels: Object.keys(sectors), 
+                datasets: [{ 
+                    data: Object.values(sectors), 
+                    backgroundColor: ['#3b82f6cc','#10b981cc','#f59e0bcc','#ef4444cc','#8b5cf6cc', '#6366f1cc', '#ec4899cc'],
+                    borderWidth: 1
+                }] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                plugins: { 
+                    legend: { position: 'right', labels: { boxWidth: 12, font: {size: 11} } } 
+                },
+                scales: { 
+                    r: { ticks: { display: false }, grid: { color: '#f3f4f6' } } 
+                }
+            }
         });
     },
 
