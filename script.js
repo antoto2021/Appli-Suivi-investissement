@@ -297,31 +297,118 @@ const app = {
         });
     },
 
+    // --- PROJECTION UPDATE: Courbes Multiples & Taux Réel ---
     renderProjections: function() {
         const ctx = document.getElementById('mainProjectionChart')?.getContext('2d');
         if(!ctx) return;
         if(this.charts.proj) this.charts.proj.destroy();
-        
-        const years = parseInt(document.getElementById('projYears').value) || 20;
-        const labels = Array.from({length: years+1}, (_, i) => `An ${i}`);
-        
-        const kpis = this.calcKPIs();
-        let growthRate = 0.05; // 5% par défaut
-        if(kpis.invested > 0) growthRate = Math.max(0.02, Math.min(0.15, (kpis.currentVal - kpis.invested) / kpis.invested));
 
-        let cap = 0;
-        this.transactions.forEach(t => { if(t.op==='Achat') cap += t.qty*t.price; if(t.op==='Vente') cap -= t.qty*t.price; });
+        const projectionYears = parseInt(document.getElementById('projYears').value) || 20;
+        const currentYear = new Date().getFullYear();
         
-        const data = [cap];
-        for(let i=1; i<=years; i++) data.push(data[i-1] * (1 + growthRate));
+        // 1. Déterminer l'année de départ
+        const txYears = this.transactions.map(t => new Date(t.date).getFullYear());
+        const startYear = txYears.length > 0 ? Math.min(...txYears) : currentYear;
+        const totalYears = (currentYear - startYear) + projectionYears;
+        const labels = Array.from({length: totalYears + 1}, (_, i) => startYear + i);
+
+        // 2. Calcul du Rendement Réel (CAGR approximatif)
+        const kpis = this.calcKPIs();
+        let annualRate = 0.05; // Fallback 5%
+        
+        if (kpis.invested > 0) {
+            const yearsSinceStart = Math.max(1, currentYear - startYear);
+            const ratio = kpis.currentVal / kpis.invested;
+            if(ratio > 0) annualRate = Math.pow(ratio, 1/yearsSinceStart) - 1;
+            // Cap de sécurité (-20% à +30%)
+            annualRate = Math.max(-0.20, Math.min(0.30, annualRate));
+        }
+
+        // 3. Construction des données (Passé & Futur)
+        const dataInvested = [];
+        const dataValue = []; // Historique lissé + Futur
+        
+        let lastInvested = 0;
+        let lastValue = 0;
+
+        labels.forEach(year => {
+            if (year <= currentYear) {
+                // --- PASSÉ (Historique) ---
+                let investedAtYear = 0;
+                this.transactions.forEach(t => {
+                    if(new Date(t.date).getFullYear() <= year) {
+                        if(t.op==='Achat') investedAtYear += t.qty * t.price;
+                        if(t.op==='Vente') investedAtYear -= t.qty * t.price;
+                    }
+                });
+                dataInvested.push(investedAtYear);
+                lastInvested = investedAtYear;
+
+                // Reconstruction valeur historique (Interpolation)
+                if (year === currentYear) {
+                    dataValue.push(kpis.currentVal);
+                    lastValue = kpis.currentVal;
+                } else if (kpis.invested > 0) {
+                    // Ratio de perf actuel appliqué à l'investi de l'époque
+                    const historicalRatio = kpis.currentVal / kpis.invested;
+                    dataValue.push(investedAtYear * historicalRatio); 
+                } else {
+                    dataValue.push(0);
+                }
+
+            } else {
+                // --- FUTUR (Projection) ---
+                dataInvested.push(lastInvested); // Cash investi reste plat
+                lastValue = lastValue * (1 + annualRate);
+                dataValue.push(lastValue);
+            }
+        });
+
+        const rateTxt = (annualRate * 100).toFixed(2) + '%';
 
         this.charts.proj = new Chart(ctx, {
             type: 'line',
-            data: { labels, datasets: [{ label: `Capital (Taux: ${(growthRate*100).toFixed(1)}%)`, data, borderColor: '#9333ea', backgroundColor: 'rgba(147, 51, 234, 0.1)', fill: true }] },
-            options: { maintainAspectRatio: false }
+            data: { 
+                labels, 
+                datasets: [
+                    { 
+                        label: `Trajectoire Portefeuille (Taux réel ${rateTxt})`, 
+                        data: dataValue, 
+                        borderColor: '#8b5cf6', // Violet
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)', 
+                        fill: true, 
+                        tension: 0.4,
+                        pointRadius: 2
+                    },
+                    { 
+                        label: 'Historique Valeur (Estimé)', 
+                        data: dataValue.slice(0, (currentYear - startYear) + 1), // S'arrête aujourd'hui
+                        borderColor: '#3b82f6', // Bleu
+                        borderDash: [2, 2], 
+                        fill: false,
+                        pointRadius: 0
+                    },
+                    { 
+                        label: 'Cumul Investi (Cash)', 
+                        data: dataInvested, 
+                        borderColor: '#f97316', // Orange
+                        borderDash: [5, 5], 
+                        backgroundColor: 'transparent',
+                        pointRadius: 0,
+                        tension: 0.1
+                    }
+                ] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: { y: { ticks: { callback: v => (v/1000).toFixed(0)+'k€' } } }
+            }
         });
+        
         this.renderYearlyBar();
-        this.renderFrequency();
+        this.renderSectorChart(); // Nouveau graphique
     },
 
     renderYearlyBar: function() {
