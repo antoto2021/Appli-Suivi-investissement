@@ -786,7 +786,7 @@ renderSectorChart: function() {
 };
 
 // =================================================================
-// 2. BUDGET SCAN APP (REACT) - AVEC AUTO-CATÉGORISATION & ENSEIGNES
+// 2. BUDGET SCAN APP (REACT) - VERSION FINALE
 // =================================================================
 
 // 1. Mots-clés pour DÉTECTER la catégorie via la description
@@ -816,6 +816,7 @@ const BudgetApp = () => {
     const [transactions, setTransactions] = useState([]);
     const [view, setView] = useState('dashboard'); 
     const [filterYear, setFilterYear] = useState('Tout'); 
+    const [filterMonth, setFilterMonth] = useState('Tout'); // Filtre Mensuel Ajouté
     const [isModalOpen, setIsModalOpen] = useState(false);
     
     // État pour les enseignes (chargé depuis le stockage ou par défaut)
@@ -829,6 +830,7 @@ const BudgetApp = () => {
 
     const barRef = useRef(null);
     const pieRef = useRef(null);
+    const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
     // Chargement Données
     useEffect(() => {
@@ -842,7 +844,7 @@ const BudgetApp = () => {
                     amount: parseFloat(t.amount) || 0,
                     description: t.description || 'Inconnu',
                     category: t.category || 'Autre',
-                    merchant: t.merchant || '' // Nouveau champ enseigne
+                    merchant: t.merchant || '' 
                 }));
                 setTransactions(safeData.sort((a,b) => new Date(b.date) - new Date(a.date)));
             } catch (e) { console.error("Err Budget Load", e); }
@@ -852,52 +854,134 @@ const BudgetApp = () => {
         return () => window.removeEventListener('budget-update', load);
     }, []);
 
-    // --- MAGIE ICI : Auto-détection de la catégorie ---
+    // Auto-détection catégorie
     useEffect(() => {
         if (!newTx.description) return;
         const text = newTx.description.toLowerCase();
-
-        // On parcourt les mots-clés de détection
         for (const [cat, keywords] of Object.entries(DETECTION_KEYWORDS)) {
             if (keywords.some(k => text.includes(k))) {
                 setNewTx(prev => ({ ...prev, category: cat }));
-                break; // On s'arrête à la première catégorie trouvée
+                break;
             }
         }
     }, [newTx.description]);
 
-    // Sauvegarde de la transaction + Apprentissage nouvelle enseigne
+    // Stats
+    const getStats = () => {
+        const now = new Date();
+        const currentM = now.getMonth();
+        const currentY = now.getFullYear();
+
+        const currentTx = transactions.filter(t => {
+            const d = new Date(t.date);
+            return d.getMonth() === currentM && d.getFullYear() === currentY;
+        });
+
+        // Top 5 Enseignes
+        const merchants = {};
+        currentTx.forEach(t => {
+            if (t.amount < 0) {
+                const name = t.merchant || t.description;
+                merchants[name] = (merchants[name] || 0) + Math.abs(t.amount);
+            }
+        });
+        const top5 = Object.entries(merchants).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+        // Camembert
+        const cats = {};
+        currentTx.forEach(t => {
+            if (t.amount < 0) cats[t.category] = (cats[t.category] || 0) + Math.abs(t.amount);
+        });
+
+        // 6 Derniers mois
+        const sixM = {};
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = `${d.getMonth() + 1}/${d.getFullYear()}`;
+            sixM[key] = 0;
+        }
+        transactions.forEach(t => {
+            if (t.amount < 0) {
+                const d = new Date(t.date);
+                const k = `${d.getMonth() + 1}/${d.getFullYear()}`;
+                if (sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount);
+            }
+        });
+
+        return { currentTx, top5, cats, sixM };
+    };
+
+    // Charts
+    useEffect(() => {
+        if (view !== 'dashboard') return;
+        const { cats, sixM } = getStats();
+
+        // Nettoyage Instances
+        if(window.bPie instanceof Chart) window.bPie.destroy();
+        if(window.bBar instanceof Chart) window.bBar.destroy();
+
+        setTimeout(() => {
+            if (pieRef.current) {
+                const ctxPie = pieRef.current.getContext('2d');
+                window.bPie = new Chart(ctxPie, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(cats),
+                        datasets: [{
+                            data: Object.values(cats),
+                            backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } }
+                });
+            }
+            if (barRef.current) {
+                const ctxBar = barRef.current.getContext('2d');
+                window.bBar = new Chart(ctxBar, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(sixM),
+                        datasets: [{
+                            label: 'Dépenses',
+                            data: Object.values(sixM),
+                            backgroundColor: '#10b981',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                });
+            }
+        }, 100);
+    }, [transactions, view]);
+
+    // Actions
+    const openAddModal = () => { setNewTx({ description: '', merchant: '', amount: '', date: new Date().toISOString().split('T')[0], category: 'Autre' }); setIsModalOpen(true); };
+
     const saveManual = async (e) => {
         e.preventDefault();
         if(!newTx.description || !newTx.amount) return;
 
-        // 1. Sauvegarde Transaction
-        // Note: Si l'utilisateur n'a pas rempli "Enseigne", on utilise la Description
         const finalMerchant = newTx.merchant || newTx.description; 
-
         await dbService.add('budget', { 
             id: Date.now(), 
             date: newTx.date, 
-            description: newTx.description, // Description libre (ex: "Resto avec potes")
-            merchant: finalMerchant,        // Enseigne structurée (ex: "McDonald's")
+            description: newTx.description,
+            merchant: finalMerchant,
             amount: -Math.abs(parseFloat(newTx.amount)), 
             category: newTx.category 
         });
 
-        // 2. Apprentissage : Ajouter l'enseigne à la liste si elle n'existe pas
+        // Apprentissage Enseigne
         if (newTx.merchant && merchantDB[newTx.category]) {
             const currentList = merchantDB[newTx.category];
-            // On vérifie si l'enseigne existe déjà (insensible à la casse)
             const exists = currentList.some(m => m.toLowerCase() === newTx.merchant.toLowerCase());
-            
             if (!exists) {
                 const updatedList = [...currentList, newTx.merchant].sort();
                 const newDB = { ...merchantDB, [newTx.category]: updatedList };
                 setMerchantDB(newDB);
-                localStorage.setItem('invest_v5_merchants', JSON.stringify(newDB)); // Sauvegarde persistante
+                localStorage.setItem('invest_v5_merchants', JSON.stringify(newDB));
             }
         } else if (newTx.merchant && !merchantDB[newTx.category]) {
-            // Cas où la catégorie n'a pas encore de liste
             const newDB = { ...merchantDB, [newTx.category]: [newTx.merchant] };
             setMerchantDB(newDB);
             localStorage.setItem('invest_v5_merchants', JSON.stringify(newDB));
@@ -907,54 +991,36 @@ const BudgetApp = () => {
         window.dispatchEvent(new Event('budget-update'));
     };
 
-    // ... (Le reste des fonctions getStats, updateTx, deleteTx, render graphiques reste IDENTIQUE) ...
-    // Je réécris les fonctions courtes pour que le bloc soit complet et fonctionnel
-
-    const getStats = () => {
-        const now = new Date();
-        const currentM = now.getMonth(), currentY = now.getFullYear();
-        const currentTx = transactions.filter(t => { const d = new Date(t.date); return d.getMonth()===currentM && d.getFullYear()===currentY; });
-        // On utilise 'merchant' s'il existe, sinon 'description' pour le Top 5
-        const merchants = {};
-        currentTx.forEach(t => { 
-            const name = t.merchant || t.description;
-            if(t.amount < 0) merchants[name] = (merchants[name]||0) + Math.abs(t.amount); 
-        });
-        const top5 = Object.entries(merchants).sort((a,b) => b[1]-a[1]).slice(0,5);
-        const cats = {};
-        currentTx.forEach(t => { if(t.amount < 0) cats[t.category] = (cats[t.category]||0) + Math.abs(t.amount); });
-        const sixM = {};
-        for(let i=5; i>=0; i--) { const d = new Date(now.getFullYear(), now.getMonth()-i, 1); sixM[`${d.getMonth()+1}/${d.getFullYear()}`] = 0; }
-        transactions.forEach(t => { if(t.amount < 0) { const d = new Date(t.date); const k = `${d.getMonth()+1}/${d.getFullYear()}`; if(sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount); } });
-        return { currentTx, top5, cats, sixM };
+    const updateTx = async (id, f, v) => {
+        const tx = transactions.find(t=>t.id===id);
+        if(tx) {
+            const up = {...tx, [f]:v};
+            await dbService.add('budget', up);
+            window.dispatchEvent(new Event('budget-update'));
+        }
+    };
+    const deleteTx = async (id) => {
+        if(confirm("Supprimer ?")) {
+            await dbService.delete('budget', id);
+            window.dispatchEvent(new Event('budget-update'));
+        }
     };
 
-    useEffect(() => {
-        if(view !== 'dashboard') return;
-        const { cats, sixM } = getStats();
-        const timer = setTimeout(() => {
-            if(pieRef.current) {
-                if(window.bPie) window.bPie.destroy();
-                const ctx = pieRef.current.getContext('2d');
-                window.bPie = new Chart(ctx, { type: 'doughnut', data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#ec4899','#10b981', '#6366f1'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } } });
-            }
-            if(barRef.current) {
-                if(window.bBar) window.bBar.destroy();
-                const ctx = barRef.current.getContext('2d');
-                window.bBar = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(sixM), datasets: [{ label: 'Dépenses', data: Object.values(sixM), backgroundColor: '#10b981', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
-            }
-        }, 100);
-        return () => clearTimeout(timer);
-    }, [transactions, view]);
-
-    const openAddModal = () => { setNewTx({ description: '', merchant: '', amount: '', date: new Date().toISOString().split('T')[0], category: 'Autre' }); setIsModalOpen(true); };
-    const updateTx = async (id, f, v) => { const tx = transactions.find(t=>t.id===id); if(tx) { await dbService.add('budget', {...tx, [f]:v}); window.dispatchEvent(new Event('budget-update')); } };
-    const deleteTx = async (id) => { if(confirm("Supprimer ?")) { await dbService.delete('budget', id); window.dispatchEvent(new Event('budget-update')); } };
-    
+    // Filtres List
     const availableYears = React.useMemo(() => {
         try { const years = new Set(transactions.map(t => (t.date ? String(t.date).substring(0,4) : '2024'))); return ['Tout', ...Array.from(years).sort().reverse()]; } catch(e) { return ['Tout']; }
     }, [transactions]);
-    const filteredList = transactions.filter(t => filterYear === 'Tout' ? true : t.date && String(t.date).startsWith(filterYear));
+
+    const filteredList = transactions.filter(t => {
+        if(!t.date) return false;
+        const d = new Date(t.date);
+        const y = d.getFullYear().toString();
+        const m = (d.getMonth() + 1).toString();
+        const yMatch = filterYear === 'Tout' || y === filterYear;
+        const mMatch = filterMonth === 'Tout' || m === filterMonth;
+        return yMatch && mMatch;
+    });
+
     const { top5 } = getStats();
 
     return (
@@ -970,32 +1036,81 @@ const BudgetApp = () => {
             <div className="flex-1 overflow-y-auto px-4 pb-24" style={{ height: 'calc(100vh - 180px)' }}>
                 {view === 'dashboard' && (
                     <div className="space-y-6 animate-fade-in pb-10">
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"><h3 className="text-sm font-bold text-gray-700 mb-2">Dépenses (6 mois)</h3><div className="h-48 relative"><canvas ref={barRef}></canvas></div></div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-sm font-bold text-gray-700 mb-2">Dépenses (6 mois)</h3>
+                            <div className="h-48 relative"><canvas ref={barRef}></canvas></div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"><h3 className="text-sm font-bold text-gray-700 mb-2">Top Dépenses (Ce mois)</h3><div className="space-y-2">{top5.map(([n,a], i) => (<div key={i} className="flex justify-between text-xs items-center border-b border-gray-50 last:border-0 pb-1"><span className="truncate flex-1 font-medium text-gray-600">{i+1}. {n}</span><span className="font-bold text-gray-800">{a.toFixed(2)}€</span></div>))}{top5.length===0 && <p className="text-xs text-gray-400">Rien ce mois-ci.</p>}</div></div>
-                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100"><h3 className="text-sm font-bold text-gray-700 mb-2">Répartition</h3><div className="h-40 relative"><canvas ref={pieRef}></canvas></div></div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                <h3 className="text-sm font-bold text-gray-700 mb-2">Top Dépenses (Ce mois)</h3>
+                                <div className="space-y-2">
+                                    {top5.map(([n,a], i) => (
+                                        <div key={i} className="flex justify-between text-xs items-center border-b border-gray-50 last:border-0 pb-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="bg-emerald-100 text-emerald-800 w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold">{i+1}</span>
+                                                <span className="truncate flex-1 font-medium text-gray-600">{n}</span>
+                                            </div>
+                                            <span className="font-bold text-gray-800">{a.toFixed(2)}€</span>
+                                        </div>
+                                    ))}
+                                    {top5.length===0 && <p className="text-xs text-gray-400">Rien ce mois-ci.</p>}
+                                </div>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                <h3 className="text-sm font-bold text-gray-700 mb-2">Répartition</h3>
+                                <div className="h-40 relative"><canvas ref={pieRef}></canvas></div>
+                            </div>
                         </div>
                     </div>
                 )}
+                
                 {view === 'list' && (
                     <div className="space-y-4 animate-fade-in pb-10">
-                        <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">{availableYears.map(y => (<button key={y} onClick={() => setFilterYear(y)} className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterYear === y ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200'}`}>{y}</button>))}</div>
+                        {/* FILTRES */}
+                        <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                            <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 border-b border-gray-50">
+                                {availableYears.map(y => (
+                                    <button key={y} onClick={() => setFilterYear(y)} 
+                                        className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterYear === y ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-50 text-gray-600 border border-gray-200'}`}>
+                                        {y}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                                <button onClick={() => setFilterMonth('Tout')} className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterMonth === 'Tout' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border border-gray-100'}`}>Tous</button>
+                                {monthNames.map((m, i) => (
+                                    <button key={i} onClick={() => setFilterMonth((i+1).toString())} 
+                                        className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterMonth === (i+1).toString() ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border border-gray-100'}`}>
+                                        {m}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-center px-1">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase">
+                                {filterMonth !== 'Tout' ? monthNames[parseInt(filterMonth)-1] : ''} {filterYear}
+                            </h3>
+                            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{filteredList.length} ops</span>
+                        </div>
+
                         <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase flex justify-between"><span>{filterYear}</span><span>{filteredList.length} lignes</span></h3>
-                            {filteredList.length === 0 ? (<div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée.</p></div>) : (
+                            {filteredList.length === 0 ? (<div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée pour cette période.</p></div>) : (
                                 filteredList.map(t => (
-                                    <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2">
+                                    <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2 relative group hover:border-emerald-200 transition">
                                         <div className="flex justify-between items-start gap-2">
-                                            <div className="flex-1">
-                                                <input type="text" value={t.merchant || t.description} readOnly className="font-bold text-gray-700 bg-transparent w-full focus:outline-none text-sm" />
+                                            <div className="flex-1 overflow-hidden">
+                                                <input type="text" value={t.merchant || t.description} readOnly className="font-bold text-gray-700 bg-transparent w-full focus:outline-none text-sm truncate" />
                                                 <div className="text-[10px] text-gray-400 italic truncate">{t.description}</div>
                                             </div>
-                                            <input type="number" step="0.01" value={t.amount} onChange={(e)=>updateTx(t.id,'amount',parseFloat(e.target.value))} className={`text-right w-24 font-mono font-bold bg-transparent focus:outline-none rounded ${t.amount<0?'text-slate-700':'text-emerald-600'}`} />
+                                            <input type="number" step="0.01" value={t.amount} onChange={(e)=>updateTx(t.id,'amount',parseFloat(e.target.value))} className={`text-right w-20 font-mono font-bold bg-transparent focus:outline-none rounded ${t.amount<0?'text-slate-700':'text-emerald-600'}`} />
                                         </div>
                                         <div className="flex justify-between items-center text-xs mt-1">
                                             <div className="flex gap-2 items-center flex-wrap">
                                                 <input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-gray-400 bg-transparent border-none p-0" />
-                                                <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 outline-none">{Object.keys(DETECTION_KEYWORDS).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                                <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="text-[10px] px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 outline-none">
+                                                    {Object.keys(DETECTION_KEYWORDS).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}
+                                                </select>
                                             </div>
                                             <button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500 px-2"><i className="fa-solid fa-trash"></i></button>
                                         </div>
@@ -1007,7 +1122,7 @@ const BudgetApp = () => {
                 )}
             </div>
 
-            {/* MODALE D'AJOUT MANUEL INTELLIGENTE */}
+            {/* MODALE D'AJOUT MANUEL */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-fade-in">
@@ -1016,85 +1131,39 @@ const BudgetApp = () => {
                             <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                         </div>
                         <form onSubmit={saveManual} className="p-5 space-y-4">
-                            
-                            {/* 1. Description qui déclenche la détection */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
-                                <input 
-                                    type="text" 
-                                    required
-                                    placeholder="Ex: Resto, Courses..." 
-                                    className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    value={newTx.description}
-                                    onChange={e => setNewTx({...newTx, description: e.target.value})}
-                                />
+                                <input type="text" required placeholder="Ex: Resto, Courses..." className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    value={newTx.description} onChange={e => setNewTx({...newTx, description: e.target.value})} />
                             </div>
-
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Montant (€)</label>
-                                    <input 
-                                        type="number" 
-                                        step="0.01" 
-                                        required
-                                        placeholder="0.00" 
-                                        className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                                        value={newTx.amount}
-                                        onChange={e => setNewTx({...newTx, amount: e.target.value})}
-                                    />
+                                    <input type="number" step="0.01" required placeholder="0.00" className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
-                                    <input 
-                                        type="date" 
-                                        required
-                                        className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                                        value={newTx.date}
-                                        onChange={e => setNewTx({...newTx, date: e.target.value})}
-                                    />
+                                    <input type="date" required className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        value={newTx.date} onChange={e => setNewTx({...newTx, date: e.target.value})} />
                                 </div>
                             </div>
-
-                            {/* 2. Catégorie (Auto-détectée mais modifiable) */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex justify-between">
-                                    <span>Catégorie</span>
-                                    {newTx.description && <span className="text-emerald-600 text-[10px] italic">Détecté auto</span>}
+                                    <span>Catégorie</span>{newTx.description && <span className="text-emerald-600 text-[10px] italic">Détecté auto</span>}
                                 </label>
-                                <select 
-                                    className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white font-bold text-gray-700"
-                                    value={newTx.category}
-                                    onChange={e => setNewTx({...newTx, category: e.target.value})}
-                                >
-                                    {Object.keys(DETECTION_KEYWORDS).concat(['Autre']).map(c => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
+                                <select className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white font-bold text-gray-700"
+                                    value={newTx.category} onChange={e => setNewTx({...newTx, category: e.target.value})}>
+                                    {Object.keys(DETECTION_KEYWORDS).concat(['Autre']).map(c => (<option key={c} value={c}>{c}</option>))}
                                 </select>
                             </div>
-
-                            {/* 3. Enseigne (Liste déroulante qui s'adapte à la catégorie + saisie libre) */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Enseigne (Optionnel)</label>
-                                <input 
-                                    type="text" 
-                                    list="merchants-list"
-                                    placeholder="Sélectionner ou écrire..." 
-                                    className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    value={newTx.merchant}
-                                    onChange={e => setNewTx({...newTx, merchant: e.target.value})}
-                                />
-                                {/* La liste change selon la catégorie sélectionnée */}
-                                <datalist id="merchants-list">
-                                    {(merchantDB[newTx.category] || []).map((m, idx) => (
-                                        <option key={idx} value={m} />
-                                    ))}
-                                </datalist>
-                                <p className="text-[10px] text-gray-400 mt-1 italic">Si vous tapez une nouvelle enseigne, elle sera mémorisée.</p>
+                                <input type="text" list="merchants-list" placeholder="Sélectionner ou écrire..." className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    value={newTx.merchant} onChange={e => setNewTx({...newTx, merchant: e.target.value})} />
+                                <datalist id="merchants-list">{(merchantDB[newTx.category] || []).map((m, idx) => (<option key={idx} value={m} />))}</datalist>
                             </div>
-
-                            <button type="submit" className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition mt-2">
-                                Valider la dépense
-                            </button>
+                            <button type="submit" className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition mt-2">Valider</button>
                         </form>
                     </div>
                 </div>
