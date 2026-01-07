@@ -1,6 +1,4 @@
-import { dbService } from './db.js';
-
-export const app = {
+window.app = {
     transactions: [],
     currentPrices: {},
     charts: {},
