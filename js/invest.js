@@ -8,13 +8,54 @@ const app = {
 
     // Liste des Tickers (Identique à l'original)
     tickerDB: {
-        'total': 'TTE.PA', 'vinci': 'DG.PA', 'air liquide': 'AI.PA', 'lvmh': 'MC.PA',
-        'sanofi': 'SAN.PA', 'schneider': 'SU.PA', 'loreal': 'OR.PA', 'hermes': 'RMS.PA',
-        'bnpp': 'BNP.PA', 'axa': 'CS.PA', 'credit agricole': 'ACA.PA', 'danone': 'BN.PA',
-        'orange': 'ORA.PA', 'renault': 'RNO.PA', 'stellantis': 'STLAP.PA', 'neurones': 'NRO',        
-        'apple': 'AAPL', 'microsoft': 'MSFT', 'tesla': 'TSLA', 'amazon': 'AMZN', 
-        'google': 'GOOGL', 'meta': 'META', 'nvidia': 'NVDA', 'realty income': 'O',
-        'cw8': 'CW8.PA', 'sp500': 'SPX', 'nasdaq': 'NDX', 'bitcoin': 'BTC'
+        // CAC 40 & Europe
+        'total': 'TTE.PA',
+        'vinci': 'DG.PA',
+        'air liquide': 'AI.PA',
+        'lvmh': 'MC.PA',
+        'sanofi': 'SAN.PA',
+        'schneider': 'SU.PA',
+        'loreal': 'OR.PA',
+        'hermes': 'RMS.PA',
+        'bnpp': 'BNP.PA',
+        'axa': 'CS.PA',
+        'credit agricole': 'ACA.PA',
+        'danone': 'BN.PA',
+        'orange': 'ORA.PA',
+        'renault': 'RNO.PA',
+        'stellantis': 'STLAP.PA',
+        'neurones': 'NRO',        
+        'accor': 'AC',
+        'mercedes': 'MBG',
+
+        // US & TECH
+        'apple': 'AAPL',
+        'microsoft': 'MSFT',
+        'tesla': 'TSLA',
+        'amazon': 'AMZN',
+        'google': 'GOOGL',
+        'meta': 'META',
+        'nvidia': 'NVDA',
+        'realty income': 'O',
+        'rocket lab': 'RKLB',
+        
+        // ETFs
+        'cw8': 'CW8.PA',        
+        'sp500': 'SPX',       
+        'nasdaq': 'NDX',      
+        'physical gold': 'IGLN', 
+        'ishares gold': 'IGLN',  // Ajout d'une variante pour être sûr
+        'gold etc': 'IGLN',      // Ajout d'une autre variante
+        
+        //NON COTÉ & CRYPTO
+        // On invente des codes (Tickers) pour que le prix manuel fonctionne
+        'CGM': 'GMF',
+        'la premiere brique': 'LPB', // Code inventé LPB
+        'la premier': 'LPB',         // Variante vue sur votre relevé (MGP*La Premier)
+        'mgp*la premier': 'LPB',     // Variante exacte du relevé
+        'bricks': 'BRICKS',
+        'bitstack': 'BTC',           // On associe Bitstack au Bitcoin par défaut
+        'bitcoin': 'BTC',
     },
     
     tips: ["Diversifiez !", "Patience.", "Achetez la peur.", "Investissez régulièrement."],
