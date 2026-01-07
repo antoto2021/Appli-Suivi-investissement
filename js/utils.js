@@ -1,4 +1,4 @@
-export const infoModule = {
+window.infoModule = {
     config: { username: 'antoto2021', repo: 'Appli-Suivi-investissement' },
     init: async function() { this.renderLocalInfo(); setTimeout(() => this.checkGitHub(true), 3000); },
     openModal: function() { document.getElementById('info-modal-overlay').classList.remove('hidden'); this.renderLocalInfo(); this.checkGitHub(false); },
