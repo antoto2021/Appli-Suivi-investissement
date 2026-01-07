@@ -1,6 +1,4 @@
-import { dbService } from './db.js';
-
-export const pdfImporter = {
+window.pdfImporter = {
     apiKey: '', 
     fileBase64: '', 
     currentMimeType: '', 
