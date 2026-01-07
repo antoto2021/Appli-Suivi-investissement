@@ -429,32 +429,74 @@ window.app = {
     },
 
     renderTable: function() {
+        // 1. Gestion du Tableau Desktop
         const tbody = document.querySelector('#transactionsTable tbody');
-        if(!tbody) return;
+        // 2. Gestion de la Liste Mobile
+        const mobileList = document.getElementById('transactionsMobileList');
+        
+        if(!tbody || !mobileList) return;
+        
         tbody.innerHTML = '';
+        mobileList.innerHTML = ''; // On vide aussi la vue mobile
+        
         const sorted = [...this.transactions].sort((a,b)=>new Date(b.date)-new Date(a.date));
         
-        if(sorted.length === 0) document.getElementById('emptyState')?.classList.remove('hidden');
-        else document.getElementById('emptyState')?.classList.add('hidden');
+        if(sorted.length === 0) {
+            document.getElementById('emptyState')?.classList.remove('hidden');
+        } else {
+            document.getElementById('emptyState')?.classList.add('hidden');
+        }
 
         sorted.forEach(tx => {
             const total = tx.op==='Dividende' ? tx.price : (tx.qty*tx.price);
-            const badge = tx.op==='Achat'?'bg-blue-100 text-blue-800':(tx.op==='Vente'?'bg-red-100 text-red-800':'bg-emerald-100 text-emerald-800');
             
+            // Couleurs des badges
+            let badgeColor = 'bg-gray-100 text-gray-800';
+            let icon = 'fa-arrow-right';
+            if(tx.op === 'Achat') { badgeColor = 'bg-blue-100 text-blue-800'; icon = 'fa-arrow-down'; }
+            if(tx.op === 'Vente') { badgeColor = 'bg-emerald-100 text-emerald-800'; icon = 'fa-arrow-up'; } // Vente = Encaissement (Vert)
+            if(tx.op === 'Dividende') { badgeColor = 'bg-yellow-100 text-yellow-800'; icon = 'fa-coins'; }
+
+            // --- VUE DESKTOP (Tableau) ---
             tbody.innerHTML += `
                 <tr class="bg-white border-b hover:bg-gray-50 transition">
-                    <td class="px-4 py-3 font-mono text-xs">${tx.date}</td>
-                    <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs ${badge}">${tx.op}</span></td>
-                    <td class="px-4 py-3 font-medium text-gray-800">${tx.name}</td>
-                    <td class="px-4 py-3 text-xs">${tx.account||'-'}</td>
+                    <td class="px-4 py-3 font-mono text-xs whitespace-nowrap">${tx.date}</td>
+                    <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs ${badgeColor}">${tx.op}</span></td>
+                    <td class="px-4 py-3 font-bold text-gray-700">${tx.name}</td>
+                    <td class="px-4 py-3 text-xs text-gray-500">${tx.account||'-'}</td>
                     <td class="px-4 py-3 text-right font-mono">${tx.op==='Dividende'?'-':tx.qty}</td>
-                    <td class="px-4 py-3 text-right font-mono text-xs">${tx.price.toFixed(2)}</td>
-                    <td class="px-4 py-3 text-right font-bold text-gray-700">${total.toFixed(2)} €</td>
-                    <td class="px-4 py-3 text-center">
-                        <button onclick="app.openModal('edit', ${tx.id})" class="text-blue-500 hover:text-blue-700 mx-1"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="app.deleteTx(${tx.id})" class="text-red-400 hover:text-red-600 mx-1"><i class="fa-solid fa-trash"></i></button>
+                    <td class="px-4 py-3 text-right font-mono text-xs text-gray-400">${tx.price.toFixed(2)}</td>
+                    <td class="px-4 py-3 text-right font-bold text-gray-800">${total.toFixed(2)} €</td>
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                        <button onclick="window.app.openModal('edit', ${tx.id})" class="text-blue-500 hover:text-blue-700 mx-1 p-1"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="window.app.deleteTx(${tx.id})" class="text-red-400 hover:text-red-600 mx-1 p-1"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 </tr>`;
+
+            // --- VUE MOBILE (Cartes) ---
+            mobileList.innerHTML += `
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-2 relative">
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <div class="w-8 h-8 rounded-full ${badgeColor} flex items-center justify-center flex-shrink-0 text-xs">
+                                <i class="fa-solid ${icon}"></i>
+                            </div>
+                            <div class="truncate">
+                                <div class="font-bold text-gray-800 truncate text-sm">${tx.name}</div>
+                                <div class="text-[10px] text-gray-400 font-mono">${tx.date} • ${tx.account || 'N/A'}</div>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0 ml-2">
+                            <div class="font-bold text-gray-800 text-sm">${total.toFixed(2)} €</div>
+                            <div class="text-[10px] text-gray-400">${tx.op === 'Dividende' ? 'Revenu' : tx.qty + ' x ' + tx.price}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end gap-3 mt-2 border-t pt-2 border-gray-50">
+                        <button onclick="window.app.openModal('edit', ${tx.id})" class="text-xs font-bold text-blue-600 flex items-center gap-1"><i class="fa-solid fa-pen"></i> Modifier</button>
+                        <button onclick="window.app.deleteTx(${tx.id})" class="text-xs font-bold text-red-500 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Suppr.</button>
+                    </div>
+                </div>`;
         });
     },
 
