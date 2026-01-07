@@ -7,7 +7,7 @@
     <link rel="apple-touch-icon" href="icon2.png">
     <link rel="icon" type="image/png" href="icon2.png">
     
-    <title>InvestTrack</title>
+    <title>InvestTrack V5 - Complete</title>
     
     <meta name="theme-color" content="#2563eb">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -38,7 +38,7 @@
                     <button onclick="window.app.nav('home')" class="p-2 text-gray-500 hover:text-blue-600 transition rounded-full hover:bg-slate-50" title="Accueil">
                         <i class="fa-solid fa-house text-xl"></i>
                     </button>
-                    <button onclick="window.infoModule.openModal()" class="p-2 text-gray-500 hover:text-emerald-600 transition rounded-full hover:bg-slate-50 relative" title="Infos & Sauvegardes">
+                    <button onclick="window.infoModule.openModal()" class="p-2 text-gray-500 hover:text-emerald-600 transition rounded-full hover:bg-slate-50 relative" title="Infos & Mises à jour">
                         <i class="fa-solid fa-circle-info text-xl"></i>
                         <span id="navUpdateDot" class="hidden absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full animate-pulse"></span>
                     </button>
@@ -57,16 +57,6 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
                 
-                <div onclick="window.app.nav('bank')" class="menu-card group border-l-4 border-pink-500">
-                    <div class="menu-icon-container bg-pink-50 text-pink-600 group-hover:bg-pink-600 group-hover:text-white">
-                        <i class="fa-solid fa-building-columns text-3xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-800 mb-1">Ma Banque</h3>
-                        <p class="text-gray-500 text-sm">Suivi de trésorerie.</p>
-                    </div>
-                </div>
-
                 <div onclick="window.app.nav('dashboard')" class="menu-card group border-l-4 border-blue-500">
                     <div class="menu-icon-container bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white">
                         <i class="fa-solid fa-gauge-high text-3xl"></i>
@@ -120,41 +110,6 @@
             
             <div class="text-center mt-12">
                 <button onclick="window.app.nav('assets')" class="text-slate-400 hover:text-blue-600 text-sm underline">Accéder au Résumé des Actifs & Prix</button>
-            </div>
-        </section>
-
-        <section id="bank-view" class="hidden animate-fade-in">
-            <div class="breadcrumb mb-6">
-                <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Banque & Cash</span>
-            </div>
-
-            <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg mb-8 relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 opacity-10"><i class="fa-solid fa-building-columns text-9xl"></i></div>
-                <p class="text-slate-400 text-sm font-bold uppercase tracking-wider mb-1">Solde Estimé Actuel</p>
-                <h2 class="text-4xl font-mono font-bold mb-4" id="bankCurrentBalance">--- €</h2>
-                
-                <div class="bg-white/10 rounded-xl p-4 backdrop-blur-sm border border-white/10">
-                    <div class="flex justify-between items-center">
-                        <label class="text-xs font-bold text-slate-300 uppercase">Solde de référence (Début de mois)</label>
-                        <button onclick="app.updateBankBalance()" class="text-xs bg-pink-500 hover:bg-pink-600 text-white px-2 py-1 rounded transition"><i class="fa-solid fa-pen"></i> Modifier</button>
-                    </div>
-                    <div class="text-xl font-mono mt-1" id="bankStartBalance">0.00 €</div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-red-100">
-                    <p class="text-xs text-gray-500 font-bold uppercase">Dépenses (Budget)</p>
-                    <p class="text-2xl font-bold text-red-500 mt-1" id="bankOutBudget">0.00 €</p>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-blue-100">
-                    <p class="text-xs text-gray-500 font-bold uppercase">Investi (Cash out)</p>
-                    <p class="text-2xl font-bold text-blue-600 mt-1" id="bankOutInvest">0.00 €</p>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-emerald-100">
-                    <p class="text-xs text-gray-500 font-bold uppercase">Entrées (Ventes/Div/Salaires)</p>
-                    <p class="text-2xl font-bold text-emerald-600 mt-1" id="bankIn">0.00 €</p>
-                </div>
             </div>
         </section>
 
@@ -213,9 +168,10 @@
                 </div>
                 <div class="flex gap-2">
                     <button onclick="window.app.openModal('new')" class="btn-primary"><i class="fa-solid fa-plus"></i> <span class="hidden sm:inline">Nouveau</span></button>
-                    <button onclick="document.getElementById('fileInput').click()" class="btn-secondary text-emerald-600 border-emerald-200 hover:bg-emerald-50"><i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importer</span></button>
+                    <button onclick="window.app.triggerGlobalImport()" class="btn-secondary text-blue-600 border-blue-200 hover:bg-blue-50"><i class="fa-solid fa-upload"></i> <span class="hidden sm:inline">Restaurer</span></button>
+                    <button onclick="document.getElementById('fileInput').click()" class="btn-secondary text-emerald-600 border-emerald-200 hover:bg-emerald-50"><i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Importer XLS</span></button>
                     <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls, .csv" onchange="window.app.handleImport(event)">
-                    <button onclick="window.app.exportExcel()" class="btn-secondary"><i class="fa-solid fa-download"></i></button>
+                    <button onclick="window.app.triggerGlobalExport()" class="btn-secondary text-orange-600 border-orange-200 hover:bg-orange-50" title="Sauvegarde Complète"><i class="fa-solid fa-download"></i></button>
                 </div>
             </div>
             <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
@@ -252,7 +208,7 @@
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div class="bg-white p-6 rounded-xl shadow-sm"><h3 class="chart-title">Cashflow Annuel</h3><div class="chart-container"><canvas id="yearlyBarChart"></canvas></div></div>
-                <div class="bg-white p-6 rounded-xl shadow-sm"><h3 class="chart-title">Répartition Sectorielle</h3><div class="chart-container"><canvas id="sectorChart"></canvas></div></div>
+                <div class="bg-white p-6 rounded-xl shadow-sm"><h3 class="chart-title">Fréquence</h3><div class="chart-container"><canvas id="frequencyChart"></canvas></div></div>
             </div>
         </section>
 
@@ -372,53 +328,22 @@
     </div>
 
     <div id="info-modal-overlay" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-fade-in relative">
-            <div class="p-4 border-b flex justify-between items-center bg-gray-50">
-                <h3 class="font-bold text-gray-800 text-lg flex items-center gap-2">
-                    <i class="fa-solid fa-circle-info text-blue-600"></i> Informations & Maintenance
-                </h3>
-                <button onclick="window.infoModule.closeModal()" class="text-gray-400 hover:text-gray-600 bg-white rounded-full p-1 w-8 h-8 shadow-sm">✕</button>
-            </div>
-
-            <div class="p-6 bg-slate-50 space-y-6 max-h-[80vh] overflow-y-auto">
-                
-                <div class="bg-emerald-50 border border-emerald-100 rounded-lg p-4">
-                    <div class="flex justify-between items-center text-xs font-bold text-emerald-800 mb-2">
-                        <span>INSTALLÉE (LOCAL) : <span id="info-local-v" class="font-mono">...</span></span>
-                        <span class="flex items-center gap-1">DISPONIBLE : <span id="info-remote-v" class="font-mono">...</span><div class="w-2 h-2 rounded-full bg-emerald-500"></div></span>
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-fade-in border-l-8 border-emerald-600 relative">
+            <button onclick="window.infoModule.closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">✕</button>
+            <div class="p-6 md:p-8 space-y-6">
+                <h2 class="text-2xl font-black text-slate-800">ℹ️ Infos & Updates</h2>
+                <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100 grid grid-cols-2 gap-4">
+                    <div class="border-r border-emerald-200 pr-2">
+                        <h3 class="text-[10px] font-bold text-emerald-700 uppercase">Version Locale</h3>
+                        <div class="font-mono text-xs font-bold text-slate-700 mt-1" id="info-local-v">Checking...</div>
                     </div>
-                    <button onclick="window.infoModule.forceUpdate()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow-sm transition flex justify-center items-center gap-2">
-                        <i class="fa-solid fa-rotate"></i> Vérifier maintenant
-                    </button>
-                </div>
-
-                <div>
-                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 text-center">Zone de sécurité</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <button onclick="window.infoModule.exportData()" class="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-bold shadow-sm flex items-center justify-center gap-2 transition active:scale-95">
-                            <i class="fa-solid fa-floppy-disk"></i> Sauvegarder (JSON)
-                        </button>
-                        
-                        <div class="relative">
-                            <button onclick="document.getElementById('restoreInput').click()" class="w-full bg-slate-600 hover:bg-slate-700 text-white py-3 px-4 rounded-lg font-bold shadow-sm flex items-center justify-center gap-2 transition active:scale-95">
-                                <i class="fa-solid fa-folder-open"></i> Restaurer (JSON)
-                            </button>
-                            <input type="file" id="restoreInput" class="hidden" accept=".json" onchange="window.infoModule.importData(event)">
-                        </div>
+                    <div class="pl-2 text-right">
+                        <h3 class="text-[10px] font-bold text-emerald-700 uppercase">GitHub</h3>
+                        <div class="font-mono text-xs font-bold text-emerald-600 mt-1" id="info-remote-v">Checking...</div>
+                        <button onclick="window.infoModule.checkGitHub()" class="mt-2 text-[10px] bg-emerald-600 text-white px-2 py-1 rounded">Vérifier</button>
                     </div>
                 </div>
-
-                <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                    <div class="flex justify-between items-center mb-1">
-                        <h4 class="font-bold text-slate-700"><i class="fa-solid fa-database text-purple-500 mr-2"></i>État du Stockage Local</h4>
-                        <span class="text-xl font-bold text-emerald-600" id="storageSize">Calcul...</span>
-                    </div>
-                    <p class="text-xs text-gray-400">Données sécurisées dans votre navigateur (IndexedDB).</p>
-                </div>
-                
-                <div class="text-center">
-                    <p class="text-xs text-gray-300 font-medium">InvestTrack V5 • Local-First Architecture</p>
-                </div>
+                <div class="text-center text-[10px] text-slate-400">© 2026 Suivi-investissement</div>
             </div>
         </div>
     </div>
@@ -427,7 +352,8 @@
         <i class="fa-solid fa-check-circle text-green-400"></i><span id="toastMsg">Notif</span>
     </div>
 
-    <script type="text/babel" src="script.js"></script>
+    <script type="module" src="js/main.js"></script>
+    
     <script>
         window.addEventListener('load', () => { if(window.lucide) lucide.createIcons(); });
     </script>
