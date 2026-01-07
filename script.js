@@ -11,7 +11,7 @@ const { useState, useEffect, useRef } = React;
 
 const dbService = {
     dbName: 'InvestTrackDB',
-    version: 3, // Force la mise à jour de la structure DB
+    version: 4, // Force la mise à jour de la structure DB
     db: null,
 
     async init() {
@@ -39,6 +39,11 @@ const dbService = {
                 // 3. Table Prix Bourse
                 if (!db.objectStoreNames.contains('invest_prices')) {
                     db.createObjectStore('invest_prices', { keyPath: 'ticker' });
+                }
+
+                // NOUVELLE TABLE : Paramètres (pour le solde banque)
+                if (!db.objectStoreNames.contains('settings')) {
+                    db.createObjectStore('settings', { keyPath: 'key' });
                 }
             };
 
@@ -90,6 +95,19 @@ const dbService = {
             tx.objectStore(storeName).delete(id);
             tx.oncomplete = () => resolve();
         });
+    }
+    // NOUVELLE FONCTION POUR VIDER LA DB (pour la restauration)
+    async clearAll() {
+        await this.init();
+        const stores = ['budget', 'invest_tx', 'invest_prices', 'settings'];
+        const promises = stores.map(name => {
+            return new Promise((resolve) => {
+                const tx = this.db.transaction(name, 'readwrite');
+                tx.objectStore(name).clear();
+                tx.oncomplete = () => resolve();
+            });
+        });
+        await Promise.all(promises);
     }
 };
 
@@ -783,6 +801,74 @@ renderSectorChart: function() {
     strColor: function(s,l,d) { let h=0; for(let i=0;i<s.length;i++)h=s.charCodeAt(i)+((h<<5)-h); return `hsl(${h%360},${l}%,${d}%)`; },
     loadDailyTip: function() { document.getElementById('dailyTip').textContent = `"${this.tips[new Date().getDate()%this.tips.length]}"`; },
     toast: function(m) { const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=m; t.classList.remove('translate-y-20','opacity-0'); setTimeout(()=>t.classList.add('translate-y-20','opacity-0'),2500); }
+
+    // --- LOGIQUE BANQUE ---
+    bankBalance: 0,
+
+    updateBankBalance: async function() {
+        const current = await this.getSetting('bankStartBalance') || 0;
+        const newVal = prompt("Entrez le solde de référence (ex: début du mois) :", current);
+        if(newVal !== null) {
+            await dbService.add('settings', { key: 'bankStartBalance', value: parseFloat(newVal) });
+            this.renderBank();
+        }
+    },
+
+    getSetting: async function(key) {
+        const data = await dbService.getAll('settings');
+        const item = data.find(i => i.key === key);
+        return item ? item.value : 0;
+    },
+
+    renderBank: async function() {
+        // 1. Récupérer le solde de départ
+        const startBalance = await this.getSetting('bankStartBalance');
+        document.getElementById('bankStartBalance').textContent = startBalance.toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
+
+        // 2. Calculer les totaux Budget (Dépenses) & Revenus (Salaire/Autre positif dans budget)
+        const budgetTx = await dbService.getAll('budget');
+        let totalBudgetOut = 0;
+        let totalIncome = 0;
+
+        // On filtre sur le mois en cours ? Pour l'instant on prend TOUT car le "Solde Initial" est un point fixe absolu
+        // Si tu veux gérer par mois, il faudra stocker une date avec le solde initial.
+        // Ici version simple : Solde Initial + Tous les mouvements enregistrés = Solde Actuel.
+        
+        budgetTx.forEach(t => {
+            if(t.amount < 0) totalBudgetOut += Math.abs(t.amount);
+            else totalIncome += t.amount;
+        });
+
+        // 3. Calculer les flux Investissement
+        // Achat = Sortie de cash (-), Vente = Entrée de cash (+), Dividende = Entrée (+)
+        let totalInvestOut = 0;
+        let totalInvestIn = 0;
+        
+        this.transactions.forEach(t => {
+            const total = t.qty * t.price; // Approximation pour Achat/Vente
+            if(t.op === 'Achat') totalInvestOut += total;
+            else if(t.op === 'Vente') totalInvestIn += total;
+            else if(t.op === 'Dividende') totalInvestIn += t.price; // Prix stocke le montant du dividende dans ton code actuel
+        });
+
+        // 4. Calcul Final
+        // Solde = Départ + (Revenus + Ventes + Dividendes) - (Dépenses + Achats)
+        const totalIn = totalIncome + totalInvestIn;
+        const finalBalance = startBalance + totalIn - totalBudgetOut - totalInvestOut;
+
+        // 5. Affichage
+        document.getElementById('bankCurrentBalance').textContent = finalBalance.toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
+        document.getElementById('bankOutBudget').textContent = '-' + totalBudgetOut.toLocaleString('fr-FR', {minimumFractionDigits: 2}) + ' €';
+        document.getElementById('bankOutInvest').textContent = '-' + totalInvestOut.toLocaleString('fr-FR', {minimumFractionDigits: 2}) + ' €';
+        document.getElementById('bankIn').textContent = '+' + totalIn.toLocaleString('fr-FR', {minimumFractionDigits: 2}) + ' €';
+    },
+
+    // AJOUTER L'APPEL A renderBank DANS nav()
+    nav: function(id) {
+        // ... code existant ...
+        if(id === 'bank') this.renderBank(); // <--- AJOUTER ICI
+        // ...
+    },
 };
 
 // =================================================================
@@ -1388,11 +1474,93 @@ const pdfImporter = {
 
 const infoModule = {
     config: { username: 'antoto2021', repo: 'Suivi-investissement' },
-    init: async function() { this.renderLocalInfo(); setTimeout(() => this.checkGitHub(true), 3000); },
-    openModal: function() { document.getElementById('info-modal-overlay').classList.remove('hidden'); this.renderLocalInfo(); this.checkGitHub(false); },
+    
+    init: async function() { 
+        this.renderLocalInfo(); 
+        this.calcStorage();
+        setTimeout(() => this.checkGitHub(true), 3000); 
+    },
+
+    openModal: function() { 
+        document.getElementById('info-modal-overlay').classList.remove('hidden'); 
+        this.renderLocalInfo(); 
+        this.calcStorage();
+        this.checkGitHub(false); 
+    },
+    
     closeModal: function() { document.getElementById('info-modal-overlay').classList.add('hidden'); },
-    renderLocalInfo: function() { document.getElementById('info-local-v').innerText = localStorage.getItem('app_version_hash')?.substring(0,7) || 'Init'; },
+    
+    renderLocalInfo: function() { 
+        document.getElementById('info-local-v').innerText = localStorage.getItem('app_version_hash')?.substring(0,7) || 'Init'; 
+    },
+
+    // --- NOUVEAU : Calcul taille stockage ---
+    calcStorage: async function() {
+        const estSize = new Blob([JSON.stringify(await this.getFullDump())]).size;
+        let unit = 'B';
+        let val = estSize;
+        if(val > 1024) { val /= 1024; unit = 'KB'; }
+        if(val > 1024) { val /= 1024; unit = 'MB'; }
+        document.getElementById('storageSize').innerText = `${val.toFixed(2)} ${unit}`;
+    },
+
+    // --- NOUVEAU : Sauvegarde JSON ---
+    getFullDump: async function() {
+        const stores = ['budget', 'invest_tx', 'invest_prices', 'settings'];
+        const dump = {};
+        for(const s of stores) {
+            dump[s] = await dbService.getAll(s);
+        }
+        dump.meta = { date: new Date().toISOString(), version: 4 };
+        return dump;
+    },
+
+    exportData: async function() {
+        const data = await this.getFullDump();
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type : 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `InvestTrack_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        app.toast("Sauvegarde téléchargée !");
+    },
+
+    // --- NOUVEAU : Restauration JSON ---
+    importData: function(e) {
+        const file = e.target.files[0];
+        if(!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                if(!data.meta || !data.budget) throw new Error("Format invalide");
+                
+                if(confirm(`Restaurer la sauvegarde du ${data.meta.date} ?\nATTENTION : Cela écrasera les données actuelles !`)) {
+                    await dbService.clearAll();
+                    
+                    // Réinjection
+                    if(data.budget) for(const i of data.budget) await dbService.add('budget', i);
+                    if(data.invest_tx) for(const i of data.invest_tx) await dbService.add('invest_tx', i);
+                    if(data.invest_prices) for(const i of data.invest_prices) await dbService.add('invest_prices', i);
+                    if(data.settings) for(const i of data.settings) await dbService.add('settings', i);
+                    
+                    alert("Restauration terminée ! La page va se recharger.");
+                    window.location.reload();
+                }
+            } catch(ex) {
+                alert("Erreur fichier : " + ex.message);
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = ''; // Reset input
+    },
+
     checkGitHub: function(bg=false) {
+        // ... (Code existant identique) ...
         const btn = document.querySelector('#info-remote-v');
         if(!bg && btn) btn.innerText = '...';
         return fetch(`https://api.github.com/repos/${this.config.username}/${this.config.repo}/commits?per_page=1`)
@@ -1413,6 +1581,7 @@ const infoModule = {
             .catch(e => { if(!bg && btn) btn.innerText = 'Err'; });
     },
     forceUpdate: function() {
+        // ... (Code existant identique) ...
         const btn = document.getElementById('refreshBtn');
         btn.classList.add('spin-once');
         this.checkGitHub().then(sha => { if(sha) localStorage.setItem('app_version_hash', sha); setTimeout(() => window.location.reload(), 800); });
