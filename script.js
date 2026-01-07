@@ -1473,7 +1473,7 @@ const pdfImporter = {
 // =================================================================
 
 const infoModule = {
-    config: { username: 'antoto2021', repo: 'Suivi-investissement' },
+    config: { username: 'antoto2021', repo: 'Appli-Suivi-investissement' },
     
     init: async function() { 
         this.renderLocalInfo(); 
