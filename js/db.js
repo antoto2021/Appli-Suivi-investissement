@@ -1,4 +1,4 @@
-export const dbService = {
+window.dbService = {
     dbName: 'InvestTrackDB',
     version: 4,
     db: null,
