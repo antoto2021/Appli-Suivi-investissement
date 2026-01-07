@@ -30,28 +30,103 @@ window.app = {
         this.setupAutoFill();
         this.renderTable();
         
-        if(document.getElementById('assets-view') && !document.getElementById('assets-view').classList.contains('hidden')) {
-            this.renderAssets();
+        // Charge les données banque au démarrage si on est sur la vue banque
+        this.renderBankSummary(); 
+        
+        // Écouteur pour mettre à jour la banque quand le budget change (depuis React)
+        window.addEventListener('budget-update', () => this.renderBankSummary());
+    },
+
+    // --- NOUVELLE LOGIQUE BANQUE ---
+    renderBankSummary: async function() {
+        // 1. Récupérer le solde initial (sauvegardé ou 0)
+        const inputEl = document.getElementById('bankInitialBalance');
+        if(!inputEl) return;
+        
+        let initial = parseFloat(inputEl.value);
+        if(isNaN(initial)) {
+            // Essayer de charger depuis le stockage local
+            const saved = localStorage.getItem('bank_initial_balance');
+            initial = saved ? parseFloat(saved) : 0;
+            inputEl.value = initial || '';
+        } else {
+            // Sauvegarder la nouvelle valeur entrée
+            localStorage.setItem('bank_initial_balance', initial);
         }
+
+        // 2. Récupérer toutes les données pour calculer les flux du MOIS EN COURS
+        // On a besoin du dbService qui est maintenant global (window.dbService)
+        const budgetTx = await window.dbService.getAll('budget');
+        const investTx = await window.dbService.getAll('invest_tx');
+        
+        const now = new Date();
+        const currentMonth = now.getMonth(); 
+        const currentYear = now.getFullYear();
+
+        let income = 0;
+        let expense = 0;
+        let invested = 0;
+
+        // Calcul Dépenses & Revenus (BudgetScan)
+        budgetTx.forEach(t => {
+            const d = new Date(t.date);
+            if(d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                if(t.amount > 0) income += t.amount; // Positif = Revenu (Salaire, etc)
+                else expense += Math.abs(t.amount);  // Négatif = Dépense
+            }
+        });
+
+        // Calcul Investissements (Achats Bourse du mois)
+        investTx.forEach(t => {
+            const d = new Date(t.date);
+            if(d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                if(t.op === 'Achat') invested += (t.qty * t.price);
+                // Optionnel: Si vous vendez, ça pourrait être considéré comme du revenu "cash" sur le compte, 
+                // mais restons simple pour l'instant.
+            }
+        });
+
+        // 3. Calcul Final
+        const currentBalance = initial + income - expense - invested;
+
+        // 4. Affichage
+        document.getElementById('bankCurrentBalance').textContent = currentBalance.toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
+        document.getElementById('bankIncome').textContent = `+${income.toFixed(2)} €`;
+        document.getElementById('bankExpenses').textContent = `-${expense.toFixed(2)} €`;
+        document.getElementById('bankInvest').textContent = `-${invested.toFixed(2)} €`;
     },
 
     nav: function(id) {
+        // Cacher toutes les sections
         document.querySelectorAll('main > section').forEach(el => {
             el.classList.add('hidden');
             el.classList.remove('block');
         });
         
+        // Afficher la section demandée
+        // Si on demande 'bank', on affiche bank-view
+        // Si on demande 'dashboard', on affiche dashboard-view, etc.
         const target = document.getElementById(id + '-view');
         if(target) {
             target.classList.remove('hidden');
             target.classList.add('block');
+        } else {
+            // Fallback: Si on demande un sous-onglet investissement (ex: assets)
+            // On affiche quand même la section, car j'ai gardé les IDs assets-view, transactions-view dans le HTML
+            const subTarget = document.getElementById(id + '-view');
+            if(subTarget) subTarget.classList.remove('hidden');
         }
         
+        // Logique spécifique par vue
         if(id === 'dashboard') { this.calcKPIs(); setTimeout(() => this.renderPie(), 100); }
         if(id === 'assets') this.renderAssets();
         if(id === 'transactions') this.renderTable();
         if(id === 'projections') setTimeout(() => this.renderProjections(), 100);
-        if(id === 'dividends') this.renderDividends();
+        if(id === 'bank') { 
+            this.renderBankSummary(); 
+            // On déclenche aussi un petit event pour React au cas où
+            window.dispatchEvent(new Event('budget-update'));
+        }
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
     },
