@@ -1,5 +1,3 @@
-import { dbService } from './db.js';
-
 const { useState, useEffect, useRef } = React;
 
 const DETECTION_KEYWORDS = {
@@ -23,7 +21,7 @@ const DEFAULT_MERCHANTS = {
     'Autre': ['Amazon', 'Fnac']
 };
 
-export const BudgetApp = () => {
+window.BudgetApp = () => {
     const [transactions, setTransactions] = useState([]);
     const [view, setView] = useState('dashboard'); 
     const [filterYear, setFilterYear] = useState('Tout'); 
