@@ -200,13 +200,27 @@ window.BudgetApp = () => {
 
     return (
         <div className="flex flex-col h-full bg-slate-50 relative">
-            <div className="flex justify-between items-center p-4 bg-white shadow-sm mb-2 sticky top-0 z-20">
-                <div className="flex gap-2 items-center">
-                    <span className="font-bold text-gray-800 mr-2">Ma Banque</span>
-                    <button onClick={()=>setView('dashboard')} className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${view==='dashboard'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>Vue d'ensemble</button>
-                    <button onClick={()=>setView('list')} className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${view==='list'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>Historique</button>
+            <div className="flex justify-between items-center p-3 md:p-4 bg-white shadow-sm mb-2 sticky top-0 z-20">
+                <div className="flex gap-2 items-center overflow-x-auto no-scrollbar">
+                    {/* On cache le titre "Ma Banque" sur mobile (hidden md:block) pour gagner de la place */}
+                    <span className="font-bold text-gray-800 mr-2 hidden md:block">Ma Banque</span>
+                    
+                    <button onClick={()=>setView('dashboard')} className={`px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition whitespace-nowrap ${view==='dashboard'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>
+                        {/* Texte court sur mobile / Long sur PC */}
+                        <span className="md:hidden">Vues</span>
+                        <span className="hidden md:inline">Vue d'ensemble</span>
+                    </button>
+                    
+                    <button onClick={()=>setView('list')} className={`px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition whitespace-nowrap ${view==='list'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>
+                        <span className="md:hidden">Hist.</span>
+                        <span className="hidden md:inline">Historique</span>
+                    </button>
                 </div>
-                <button onClick={openAddModal} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">+ Dépense</button>
+                
+                <button onClick={openAddModal} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow flex-shrink-0 ml-2">
+                    <span className="md:hidden">+ Add</span>
+                    <span className="hidden md:inline">+ Dépense</span>
+                </button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 pb-24" style={{ height: 'calc(100vh - 180px)' }}>
