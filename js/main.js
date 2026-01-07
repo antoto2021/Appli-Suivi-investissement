@@ -1,33 +1,26 @@
-import { app } from './invest.js';
-import { BudgetApp } from './budget.js';
-import { pdfImporter } from './ai.js';
-import { infoModule } from './utils.js';
-
-// Rendre les modules accessibles globalement pour le HTML (onclick="app.x")
-window.app = app;
-window.pdfImporter = pdfImporter;
-window.infoModule = infoModule;
+// js/main.js - Version Corrigée
 
 const bootstrap = () => {
     console.log("Bootstrap Application Complete...");
     
-    // Init Modules Vanilla
-    app.init();
-    infoModule.init();
+    // 1. Init Modules Vanilla (app et infoModule sont maintenant globaux)
+    if(window.app) window.app.init();
+    if(window.infoModule) window.infoModule.init();
     
-    // Init React (Ma Banque)
+    // 2. Init React (Ma Banque)
     const rootEl = document.getElementById('budget-root');
-    if(rootEl) {
+    if(rootEl && window.BudgetApp) {
         try {
             const root = ReactDOM.createRoot(rootEl);
-            root.render(React.createElement(BudgetApp));
+            // On utilise window.BudgetApp
+            root.render(React.createElement(window.BudgetApp));
             console.log("React (Ma Banque) monté.");
         } catch(e) {
             console.error("Erreur React:", e);
         }
     }
     
-    // Icons
+    // 3. Icons
     if(window.lucide) lucide.createIcons();
 };
 
