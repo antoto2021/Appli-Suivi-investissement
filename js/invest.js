@@ -119,7 +119,7 @@ window.app = {
         }
         
         // Logique spécifique par vue
-        if(id === 'dashboard') { this.calcKPIs(); setTimeout(() => this.renderPie(), 100); }
+        if(id === 'dashboard') { this.calcKPIs(); setTimeout(() => { this.renderPie(); this.renderSectorChart(); this.renderYearlyBar(); }, 100); }
         if(id === 'assets') this.renderAssets();
         if(id === 'transactions') this.renderTable();
         if(id === 'projections') { this.initSimulatorInputs(); setTimeout(() => this.renderProjections(), 100); }
@@ -617,44 +617,86 @@ window.app = {
         if(this.charts.bar) this.charts.bar.destroy();
         
         const yData = {};
-        this.transactions.filter(t=>t.op==='Achat').forEach(t => {
-            const y = t.date.split('-')[0];
-            yData[y] = (yData[y]||0) + (t.qty*t.price);
+        // On ne compte que les ACHATS pour voir l'effort d'épargne réel
+        this.transactions.filter(t => t.op === 'Achat').forEach(t => {
+            const y = t.date.split('-')[0]; // Extrait l'année "2023" de "2023-05-12"
+            yData[y] = (yData[y] || 0) + (t.qty * t.price);
         });
+        
+        const sortedYears = Object.keys(yData).sort();
         
         this.charts.bar = new Chart(ctx, {
             type: 'bar',
-            data: { labels: Object.keys(yData).sort(), datasets: [{ label:'Investi', data:Object.values(yData), backgroundColor:'#10b981' }] },
-            options: { maintainAspectRatio: false }
+            data: { 
+                labels: sortedYears, 
+                datasets: [{ 
+                    label: 'Montant Investi', 
+                    data: sortedYears.map(y => yData[y]), 
+                    backgroundColor: '#3b82f6',
+                    borderRadius: 4
+                }] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                scales: {
+                    y: { ticks: { callback: v => (v/1000).toFixed(0) + 'k€' } }
+                }
+            }
         });
     },
 
     renderSectorChart: function() {
-        const canvas = document.getElementById('sectorChart') || document.getElementById('frequencyChart');
-        if(!canvas) return;
-        const ctx = canvas.getContext('2d');
-        const existingChart = Chart.getChart(canvas);
-        if (existingChart) existingChart.destroy();
-        if(this.charts.sec) this.charts.sec = null;
+        const ctx = document.getElementById('sectorChart')?.getContext('2d');
+        if(!ctx) return;
+        if(this.charts.sec) this.charts.sec.destroy();
 
         const sectors = {};
-        this.transactions.filter(t => t.op === 'Achat').forEach(t => {
-            const s = t.sector || 'Autre';
-            sectors[s] = (sectors[s] || 0) + (t.qty * t.price);
+        // On pondère par la valorisation actuelle (Qté * Prix Actuel) pour voir l'exposition réelle
+        // Ou par le montant investi si on préfère. Ici on prend la valeur actuelle (plus logique pour une alloc).
+        const pf = this.getPortfolio();
+        
+        Object.values(pf).forEach(asset => {
+            if(asset.qty < 0.001) return;
+            // On retrouve la transaction d'origine ou on cherche le secteur autrement
+            // Simplification : on cherche le secteur dans la dernière transaction associée à ce ticker
+            const lastTx = this.transactions.find(t => t.ticker === asset.ticker || t.name === asset.name);
+            const s = lastTx?.sector || 'Autre';
+            
+            const price = this.currentPrices[asset.name] || this.currentPrices[asset.ticker] || (asset.invested/asset.qty);
+            const val = asset.qty * price;
+            
+            sectors[s] = (sectors[s] || 0) + val;
         });
-
-        if (Object.keys(sectors).length === 0) return;
 
         this.charts.sec = new Chart(ctx, {
             type: 'polarArea',
             data: { 
                 labels: Object.keys(sectors), 
-                datasets: [{ data: Object.values(sectors), backgroundColor: ['#3b82f6cc','#10b981cc','#f59e0bcc','#ef4444cc','#8b5cf6cc', '#6366f1cc', '#ec4899cc'], borderWidth: 1 }] 
+                datasets: [{ 
+                    data: Object.values(sectors), 
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.7)',  // Blue
+                        'rgba(16, 185, 129, 0.7)',  // Green
+                        'rgba(245, 158, 11, 0.7)',  // Amber
+                        'rgba(239, 68, 68, 0.7)',   // Red
+                        'rgba(139, 92, 246, 0.7)',  // Purple
+                        'rgba(236, 72, 153, 0.7)',  // Pink
+                        'rgba(99, 102, 241, 0.7)',  // Indigo
+                    ],
+                    borderWidth: 1
+                }] 
             },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: {size: 11} } } }, scales: { r: { ticks: { display: false }, grid: { color: '#f3f4f6' } } } }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                plugins: { 
+                    legend: { position: 'right', labels: { boxWidth: 10, font: {size: 10} } } 
+                },
+                scales: { r: { ticks: { display: false }, grid: { color: '#f3f4f6' } } }
+            }
         });
     },
-
     renderAssets: function() {
         const grid = document.getElementById('assetsGrid');
         if(!grid) return;
