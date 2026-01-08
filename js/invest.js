@@ -297,7 +297,9 @@ window.app = {
         this.renderCompoundInterest();
     },
 
-    // 4. Graphique 1 : Patrimoine (Nominal vs Réel avec Inflation)
+    // 4. Graphique 1 : SIMULATEUR PATRIMOINE (Inspiré de Finary Wealth Simulator)
+    // Logique : Calcul mensuel précis pour projeter le patrimoine total
+    // Affiche : Patrimoine Nominal (Brut) vs Patrimoine Réel (Ajusté de l'inflation)
     renderWealthSimulator: function() {
         const ctx = document.getElementById('wealthSimulatorChart')?.getContext('2d');
         if(!ctx) return;
@@ -308,34 +310,44 @@ window.app = {
         const monthly = parseFloat(document.getElementById('simMonthly')?.value) || 0;
         const yieldPct = parseFloat(document.getElementById('simYield')?.value) / 100 || 0.08;
         const years = parseInt(document.getElementById('simYears')?.value) || 20;
-        const inflation = parseFloat(document.getElementById('simInflation')?.value) / 100 || 0.025;
+        const inflation = parseFloat(document.getElementById('simInflation')?.value) / 100 || 0; // Si 0, pas d'ajustement
         
         const labels = [];
         const dataNominal = [];
         const dataReal = [];
         const currentYear = new Date().getFullYear();
 
-        let currentNominal = initial;
-        let currentReal = initial; // Au début, 1€ = 1€
+        // Calculs basés sur une composition MENSUELLE (plus précis, comme Finary)
+        let balance = initial;
+        const monthlyRate = yieldPct / 12;
 
         for(let i = 0; i <= years; i++) {
             labels.push(currentYear + i);
-            dataNominal.push(currentNominal);
-            dataReal.push(currentReal);
+            
+            // Valeur Nominale (Ce qui sera affiché sur le compte en banque)
+            dataNominal.push(balance);
 
-            // Calcul année suivante
-            // Intérêts
-            currentNominal = currentNominal * (1 + yieldPct);
-            // Ajouts mensuels (12 mois)
-            currentNominal += (monthly * 12); 
+            // Valeur Réelle (Ce que ça vaut en pouvoir d'achat d'aujourd'hui)
+            // Formule : ValeurNominale / (1 + inflation)^année
+            const realValue = balance / Math.pow(1 + inflation, i);
+            dataReal.push(realValue);
 
-            // Ajustement Inflation (Le pouvoir d'achat baisse)
-            // Formule simplifiée : Valeur Réelle = Valeur Nominale / (1 + inflation)^année
-            currentReal = currentNominal / Math.pow(1 + inflation, i + 1);
+            // Projection pour l'année suivante (12 mois d'intérêts composés + versements)
+            if (i < years) {
+                for(let m = 0; m < 12; m++) {
+                    balance += monthly;           // On ajoute l'épargne du mois
+                    balance *= (1 + monthlyRate); // On applique l'intérêt du mois
+                }
+            }
         }
 
-        // Affichage du KPI final
-        document.getElementById('finalRealWealth').innerText = dataReal[dataReal.length-1].toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0});
+        // Mise à jour du KPI Textuel
+        const finalVal = dataReal[dataReal.length-1];
+        const finalNominal = dataNominal[dataNominal.length-1];
+        document.getElementById('finalRealWealth').innerHTML = `
+            ${finalVal.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0})}
+            <span class="text-xs text-gray-400 block font-normal">Brut: ${finalNominal.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0})}</span>
+        `;
 
         this.charts.wealth = new Chart(ctx, {
             type: 'line',
@@ -343,22 +355,26 @@ window.app = {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Patrimoine Nominal (Brut)',
+                        label: 'Patrimoine Projeté (Brut)',
                         data: dataNominal,
-                        borderColor: '#9333ea', // Purple
-                        backgroundColor: 'rgba(147, 51, 234, 0.1)',
-                        borderWidth: 2,
+                        borderColor: '#2563eb', // Bleu Finary
+                        backgroundColor: 'rgba(37, 99, 235, 0.05)',
+                        borderWidth: 3,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
                         fill: true,
                         tension: 0.4
                     },
                     {
-                        label: `Pouvoir d'Achat (Net Inflation ${inflation*100}%)`,
+                        label: `Pouvoir d'Achat Réel (Inflation ${document.getElementById('simInflation').value}%)`,
                         data: dataReal,
-                        borderColor: '#2563eb', // Blue
+                        borderColor: '#9ca3af', // Gris
                         borderWidth: 2,
-                        borderDash: [5, 5],
+                        borderDash: [4, 4],
                         pointRadius: 0,
-                        fill: false
+                        pointHoverRadius: 4,
+                        fill: false,
+                        tension: 0.4
                     }
                 ]
             },
@@ -367,55 +383,71 @@ window.app = {
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
+                    legend: { position: 'top', align: 'end', labels: { boxWidth: 10, usePointStyle: true } },
                     tooltip: {
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                        titleColor: '#1e293b',
+                        bodyColor: '#475569',
+                        borderColor: '#e2e8f0',
+                        borderWidth: 1,
+                        padding: 10,
                         callbacks: {
                             label: (context) => context.dataset.label + ': ' + Math.round(context.raw).toLocaleString() + ' €'
                         }
                     }
                 },
                 scales: {
-                    y: { ticks: { callback: v => (v/1000).toFixed(0) + 'k€' } }
+                    x: { grid: { display: false } },
+                    y: { border: { display: false }, ticks: { callback: v => (v/1000).toFixed(0) + 'k€' } }
                 }
             }
         });
     },
 
-    // 5. Graphique 2 : Intérêts Composés (Stacked Bar : Capital + Versements + Intérêts)
+    // 5. Graphique 2 : EFFET BOULE DE NEIGE (Inspiré de Finary Compound Interest)
+    // Logique : Stacked Bar pour montrer la part des intérêts vs versements
     renderCompoundInterest: function() {
         const ctx = document.getElementById('compoundInterestChart')?.getContext('2d');
         if(!ctx) return;
         if(this.charts.compound) this.charts.compound.destroy();
 
+        // Récup Inputs
         const initial = parseFloat(document.getElementById('simInitial')?.value) || 0;
         const monthly = parseFloat(document.getElementById('simMonthly')?.value) || 0;
         const yieldPct = parseFloat(document.getElementById('simYield')?.value) / 100 || 0.08;
         const years = parseInt(document.getElementById('simYears')?.value) || 20;
 
         const labels = [];
-        const dInitial = [];
-        const dDeposits = [];
-        const dInterests = [];
+        const dInitial = [];    // Base (Gris)
+        const dDeposits = [];   // Versements (Bleu)
+        const dInterests = [];  // Intérêts (Vert/Violet)
         const currentYear = new Date().getFullYear();
 
-        let totalInvested = initial; // Capital de base + Versements cumulés
-        let totalValue = initial;    // Valeur totale du portefeuille
-        let cumDeposits = 0;         // Juste la somme des versements mensuels
+        let balance = initial;
+        let totalDeposited = 0; // Cumul des versements SEULS (sans intérêts)
+        const monthlyRate = yieldPct / 12;
 
         for(let i = 0; i <= years; i++) {
             labels.push(currentYear + i);
             
+            // 1. La part "Capital Initial" reste fixe visuellement
             dInitial.push(initial);
-            dDeposits.push(cumDeposits);
-            dInterests.push(totalValue - (initial + cumDeposits));
-
-            // Calcul année suivante
-            // 1. Les versements de l'année s'ajoutent
-            const yearlyDeposits = monthly * 12;
-            cumDeposits += yearlyDeposits;
             
-            // 2. Le tout produit des intérêts (simplification : intérêts calculés en fin d'année sur le total)
-            // Finary fait un calcul mensuel, ici on fait une approx annuelle pour la vitesse
-            totalValue = (totalValue + yearlyDeposits) * (1 + yieldPct);
+            // 2. La part "Versements" est le cumul pur des ajouts mensuels
+            dDeposits.push(totalDeposited);
+
+            // 3. La part "Intérêts" est le reste : (Valeur Totale - (Initial + Versements))
+            const totalInterests = balance - (initial + totalDeposited);
+            dInterests.push(totalInterests > 0 ? totalInterests : 0);
+
+            // Calcul année suivante (mois par mois)
+            if (i < years) {
+                for(let m = 0; m < 12; m++) {
+                    balance += monthly;           // Ajout au solde réel
+                    balance *= (1 + monthlyRate); // Intérêts composés
+                    totalDeposited += monthly;    // Suivi des versements seuls
+                }
+            }
         }
 
         const finalInterest = dInterests[dInterests.length-1];
@@ -427,21 +459,21 @@ window.app = {
                 labels: labels,
                 datasets: [
                     {
+                        label: 'Intérêts Composés',
+                        data: dInterests,
+                        backgroundColor: '#10b981', // Vert Emeraude (Le gain)
+                        stack: 'Stack 0'
+                    },
+                    {
+                        label: 'Vos Versements',
+                        data: dDeposits,
+                        backgroundColor: '#3b82f6', // Bleu (L'effort)
+                        stack: 'Stack 0'
+                    },
+                    {
                         label: 'Capital Initial',
                         data: dInitial,
-                        backgroundColor: '#cbd5e1', // Gris
-                        stack: 'Stack 0'
-                    },
-                    {
-                        label: 'Versements Cumulés',
-                        data: dDeposits,
-                        backgroundColor: '#3b82f6', // Bleu
-                        stack: 'Stack 0'
-                    },
-                    {
-                        label: 'Intérêts Générés',
-                        data: dInterests,
-                        backgroundColor: '#10b981', // Vert
+                        backgroundColor: '#94a3b8', // Gris (Le socle)
                         stack: 'Stack 0'
                     }
                 ]
@@ -451,14 +483,22 @@ window.app = {
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 scales: {
-                    x: { stacked: true },
+                    x: { stacked: true, grid: { display: false } },
                     y: { 
                         stacked: true,
+                        border: { display: false },
                         ticks: { callback: v => (v/1000).toFixed(0) + 'k€' }
                     }
                 },
                 plugins: {
+                    legend: { position: 'top', align: 'end', labels: { boxWidth: 10, usePointStyle: true } },
                     tooltip: {
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                        titleColor: '#1e293b',
+                        bodyColor: '#475569',
+                        borderColor: '#e2e8f0',
+                        borderWidth: 1,
+                        padding: 10,
                         callbacks: {
                             label: (context) => context.dataset.label + ': ' + Math.round(context.raw).toLocaleString() + ' €'
                         }
