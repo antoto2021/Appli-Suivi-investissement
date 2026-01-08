@@ -2,6 +2,7 @@ window.app = {
     transactions: [],
     currentPrices: {},
     charts: {},
+    simData: { monthlySavings: 0, initialized: false },
     
     tickerDB: {
         'total': 'TTE.PA', 'vinci': 'DG.PA', 'air liquide': 'AI.PA', 'lvmh': 'MC.PA',
@@ -121,7 +122,7 @@ window.app = {
         if(id === 'dashboard') { this.calcKPIs(); setTimeout(() => this.renderPie(), 100); }
         if(id === 'assets') this.renderAssets();
         if(id === 'transactions') this.renderTable();
-        if(id === 'projections') setTimeout(() => this.renderProjections(), 100);
+        if(id === 'projections') { this.initSimulatorInputs(); setTimeout(() => this.renderProjections(), 100); }
         if(id === 'bank') { 
             this.renderBankSummary(); 
             // On déclenche aussi un petit event pour React au cas où
@@ -245,6 +246,225 @@ window.app = {
             type: 'doughnut',
             data: { labels: Object.keys(acc), datasets: [{ data: Object.values(acc), backgroundColor: ['#3b82f6','#8b5cf6','#10b981','#f59e0b'] }] },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+        });
+    },
+
+    // --- NOUVELLE LOGIQUE SIMULATEUR & PROJECTIONS ---
+
+    // 1. Calculer l'épargne moyenne historique pour pré-remplir
+    calcAverageSavings: function() {
+        if(this.transactions.length < 2) return 100; // Valeur par défaut
+        
+        // On cherche le premier et dernier achat
+        const sorted = [...this.transactions].sort((a,b) => new Date(a.date) - new Date(b.date));
+        const firstDate = new Date(sorted[0].date);
+        const lastDate = new Date();
+        
+        // Nombre de mois écoulés
+        const months = (lastDate.getFullYear() - firstDate.getFullYear()) * 12 + (lastDate.getMonth() - firstDate.getMonth());
+        const effectiveMonths = Math.max(1, months);
+
+        // Total investi (Cash sorti de la poche)
+        let totalInvested = 0;
+        this.transactions.forEach(t => {
+            if(t.op === 'Achat') totalInvested += (t.qty * t.price);
+            if(t.op === 'Vente') totalInvested -= (t.qty * t.price); // On simplifie
+        });
+
+        return Math.round(totalInvested / effectiveMonths);
+    },
+
+    // 2. Initialiser les champs du simulateur avec les données réelles
+    initSimulatorInputs: function() {
+        if(this.simData.initialized) return;
+        
+        const kpis = this.calcKPIs();
+        const avgSave = this.calcAverageSavings();
+
+        // Remplir les inputs
+        const elInit = document.getElementById('simInitial');
+        const elMonth = document.getElementById('simMonthly');
+        
+        if(elInit) elInit.value = Math.round(kpis.currentVal);
+        if(elMonth) elMonth.value = avgSave;
+
+        this.simData.initialized = true;
+    },
+
+    // 3. Fonction principale appelée par les inputs "onchange"
+    updateSimulations: function() {
+        this.renderWealthSimulator();
+        this.renderCompoundInterest();
+    },
+
+    // 4. Graphique 1 : Patrimoine (Nominal vs Réel avec Inflation)
+    renderWealthSimulator: function() {
+        const ctx = document.getElementById('wealthSimulatorChart')?.getContext('2d');
+        if(!ctx) return;
+        if(this.charts.wealth) this.charts.wealth.destroy();
+
+        // Récupération Inputs
+        const initial = parseFloat(document.getElementById('simInitial')?.value) || 0;
+        const monthly = parseFloat(document.getElementById('simMonthly')?.value) || 0;
+        const yieldPct = parseFloat(document.getElementById('simYield')?.value) / 100 || 0.08;
+        const years = parseInt(document.getElementById('simYears')?.value) || 20;
+        const inflation = parseFloat(document.getElementById('simInflation')?.value) / 100 || 0.025;
+        
+        const labels = [];
+        const dataNominal = [];
+        const dataReal = [];
+        const currentYear = new Date().getFullYear();
+
+        let currentNominal = initial;
+        let currentReal = initial; // Au début, 1€ = 1€
+
+        for(let i = 0; i <= years; i++) {
+            labels.push(currentYear + i);
+            dataNominal.push(currentNominal);
+            dataReal.push(currentReal);
+
+            // Calcul année suivante
+            // Intérêts
+            currentNominal = currentNominal * (1 + yieldPct);
+            // Ajouts mensuels (12 mois)
+            currentNominal += (monthly * 12); 
+
+            // Ajustement Inflation (Le pouvoir d'achat baisse)
+            // Formule simplifiée : Valeur Réelle = Valeur Nominale / (1 + inflation)^année
+            currentReal = currentNominal / Math.pow(1 + inflation, i + 1);
+        }
+
+        // Affichage du KPI final
+        document.getElementById('finalRealWealth').innerText = dataReal[dataReal.length-1].toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0});
+
+        this.charts.wealth = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Patrimoine Nominal (Brut)',
+                        data: dataNominal,
+                        borderColor: '#9333ea', // Purple
+                        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: `Pouvoir d'Achat (Net Inflation ${inflation*100}%)`,
+                        data: dataReal,
+                        borderColor: '#2563eb', // Blue
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => context.dataset.label + ': ' + Math.round(context.raw).toLocaleString() + ' €'
+                        }
+                    }
+                },
+                scales: {
+                    y: { ticks: { callback: v => (v/1000).toFixed(0) + 'k€' } }
+                }
+            }
+        });
+    },
+
+    // 5. Graphique 2 : Intérêts Composés (Stacked Bar : Capital + Versements + Intérêts)
+    renderCompoundInterest: function() {
+        const ctx = document.getElementById('compoundInterestChart')?.getContext('2d');
+        if(!ctx) return;
+        if(this.charts.compound) this.charts.compound.destroy();
+
+        const initial = parseFloat(document.getElementById('simInitial')?.value) || 0;
+        const monthly = parseFloat(document.getElementById('simMonthly')?.value) || 0;
+        const yieldPct = parseFloat(document.getElementById('simYield')?.value) / 100 || 0.08;
+        const years = parseInt(document.getElementById('simYears')?.value) || 20;
+
+        const labels = [];
+        const dInitial = [];
+        const dDeposits = [];
+        const dInterests = [];
+        const currentYear = new Date().getFullYear();
+
+        let totalInvested = initial; // Capital de base + Versements cumulés
+        let totalValue = initial;    // Valeur totale du portefeuille
+        let cumDeposits = 0;         // Juste la somme des versements mensuels
+
+        for(let i = 0; i <= years; i++) {
+            labels.push(currentYear + i);
+            
+            dInitial.push(initial);
+            dDeposits.push(cumDeposits);
+            dInterests.push(totalValue - (initial + cumDeposits));
+
+            // Calcul année suivante
+            // 1. Les versements de l'année s'ajoutent
+            const yearlyDeposits = monthly * 12;
+            cumDeposits += yearlyDeposits;
+            
+            // 2. Le tout produit des intérêts (simplification : intérêts calculés en fin d'année sur le total)
+            // Finary fait un calcul mensuel, ici on fait une approx annuelle pour la vitesse
+            totalValue = (totalValue + yearlyDeposits) * (1 + yieldPct);
+        }
+
+        const finalInterest = dInterests[dInterests.length-1];
+        document.getElementById('totalInterests').innerText = finalInterest.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0});
+
+        this.charts.compound = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Capital Initial',
+                        data: dInitial,
+                        backgroundColor: '#cbd5e1', // Gris
+                        stack: 'Stack 0'
+                    },
+                    {
+                        label: 'Versements Cumulés',
+                        data: dDeposits,
+                        backgroundColor: '#3b82f6', // Bleu
+                        stack: 'Stack 0'
+                    },
+                    {
+                        label: 'Intérêts Générés',
+                        data: dInterests,
+                        backgroundColor: '#10b981', // Vert
+                        stack: 'Stack 0'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { stacked: true },
+                    y: { 
+                        stacked: true,
+                        ticks: { callback: v => (v/1000).toFixed(0) + 'k€' }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => context.dataset.label + ': ' + Math.round(context.raw).toLocaleString() + ' €'
+                        }
+                    }
+                }
+            }
         });
     },
 
