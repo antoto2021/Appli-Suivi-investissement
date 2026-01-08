@@ -192,8 +192,12 @@
                 </div>
                 <div class="flex gap-2 flex-wrap">
                      <button onclick="window.app.nav('dashboard')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded font-bold">Retour</button>
-                    <button onclick="window.app.openModal('new')" class="btn-primary py-2"><i class="fa-solid fa-plus"></i> <span class="inline">Nouveau</span></button>
-                    <button onclick="window.app.triggerGlobalExport()" class="btn-secondary py-2"><i class="fa-solid fa-download"></i></button>
+                     <button onclick="window.app.openModal('new')" class="btn-primary py-2"><i class="fa-solid fa-plus"></i> <span class="inline">Nouveau</span></button>
+                     <button onclick="document.getElementById('importExcel').click()" class="btn-secondary py-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50" title="Importer Excel">
+                        <i class="fa-solid fa-file-excel"></i> <span class="hidden md:inline">Import</span>
+                     </button>
+                    <input type="file" id="importExcel" class="hidden" accept=".xlsx, .xls, .csv" onchange="window.app.handleImport(event)">
+                    <button onclick="window.app.triggerGlobalExport()" class="btn-secondary py-2" title="Sauvegarde Complète"><i class="fa-solid fa-download"></i></button>
                 </div>
             </div>
 
