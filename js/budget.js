@@ -1,7 +1,6 @@
-// js/budget.js
+// js/budget.js - Version Optimisée Performance
 
-// On suppose que dbService est global (window.dbService)
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React; // Ajout de useMemo
 
 const DETECTION_KEYWORDS = {
     'Alimentation': ['course', 'super u', 'leclerc', 'auchan', 'lidl', 'carrefour', 'intermarche', 'market', 'franprix', 'monoprix', 'boulangerie', 'ms nanterre'],
@@ -14,8 +13,10 @@ const DETECTION_KEYWORDS = {
 };
 
 const DEFAULT_MERCHANTS = {
-    'Alimentation': ['Super U', 'Lidl', 'Carrefour', 'Leclerc', 'Auchan'],
-    'Restauration': ['McDonald\'s', 'Burger King', 'Uber Eats'],
+    'Alimentation': ['Super U', 'Lidl', 'Carrefour', 'Leclerc', 'Auchan', 'intermarche', 'market', 'franprix', 'monoprix', 'boulangerie', 'ms nanterre'],
+    'Restauration': ['McDonald\'s', 'Burger King', 'Uber Eats', 'O Tacos', 'Sushi Yama', 'Dominos', 'Crousti', 'KFC'],
+    'Transport': ['SNCF', 'Pass Navigo', 'Uber', 'Bolt', 'Taxi', 'Total Energie', 'Esso Express', 'BP', 'Péage', 'Parking', 'Dott', 'Lime', 'Super U'],
+    'Loisirs': ['Netflix', 'Cinema', 'UGC', 'Sport', 'Soirée Shotgun', 'Concert'],
     'Salaire': ['Virement', 'Employeur', 'CAF', 'Remboursement'],
     'Autre': ['Amazon', 'Fnac']
 };
@@ -26,8 +27,6 @@ window.BudgetApp = () => {
     const [filterYear, setFilterYear] = useState('Tout'); 
     const [filterMonth, setFilterMonth] = useState('Tout');
     const [isModalOpen, setIsModalOpen] = useState(false);
-    
-    // Nouvel état : type de transaction (expense ou income)
     const [txType, setTxType] = useState('expense'); 
 
     const [merchantDB, setMerchantDB] = useState(() => {
@@ -40,12 +39,14 @@ window.BudgetApp = () => {
     const pieRef = useRef(null);
     const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
-    // Chargement initial
+    // 1. CHARGEMENT OPTIMISÉ
     useEffect(() => {
         const load = async () => {
             try {
                 await window.dbService.init();
                 const data = await window.dbService.getAll('budget');
+                
+                // Pré-calcul simple pour éviter de le refaire au rendu
                 const safeData = (data || []).map(t => ({
                     ...t,
                     date: t.date || new Date().toISOString().split('T')[0],
@@ -54,7 +55,11 @@ window.BudgetApp = () => {
                     category: t.category || 'Autre',
                     merchant: t.merchant || '' 
                 }));
-                setTransactions(safeData.sort((a,b) => new Date(b.date) - new Date(a.date)));
+
+                // OPTIMISATION TRI : Comparaison de String (beaucoup plus rapide que new Date())
+                safeData.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+                
+                setTransactions(safeData);
             } catch (e) { console.error("Err Budget Load", e); }
         };
         load();
@@ -62,24 +67,17 @@ window.BudgetApp = () => {
         return () => window.removeEventListener('budget-update', load);
     }, []);
 
-    // Écouteur pour ouvrir la modal "Revenus" depuis l'extérieur (index.html)
     useEffect(() => {
         const handleOpenIncome = () => {
-            setNewTx({ 
-                description: 'Virement', 
-                merchant: '', 
-                amount: '', 
-                date: new Date().toISOString().split('T')[0], 
-                category: 'Salaire' 
-            });
-            setTxType('income'); // On force le mode Revenu
+            setNewTx({ description: 'Virement', merchant: '', amount: '', date: new Date().toISOString().split('T')[0], category: 'Salaire' });
+            setTxType('income');
             setIsModalOpen(true);
         };
         window.addEventListener('open-income-modal', handleOpenIncome);
         return () => window.removeEventListener('open-income-modal', handleOpenIncome);
     }, []);
 
-    // Détection auto catégorie
+    // Catégorisation auto (inchangé)
     useEffect(() => {
         if (!newTx.description) return;
         const text = newTx.description.toLowerCase();
@@ -91,61 +89,74 @@ window.BudgetApp = () => {
         }
     }, [newTx.description]);
 
-    const getStats = () => {
+    // 2. CALCULS STATISTIQUES MÉMORISÉS (useMemo)
+    // Cela empêche de recalculer tout l'historique à chaque fois qu'on clique sur un bouton
+    const stats = useMemo(() => {
         const now = new Date();
         const currentM = now.getMonth();
         const currentY = now.getFullYear();
 
-        const currentTx = transactions.filter(t => {
-            const d = new Date(t.date);
-            return d.getMonth() === currentM && d.getFullYear() === currentY;
-        });
-
+        // On ne parcourt le tableau qu'une seule fois si possible
+        const currentTx = [];
         const merchants = {};
-        currentTx.forEach(t => {
-            if (t.amount < 0) {
-                const name = t.merchant || t.description;
-                merchants[name] = (merchants[name] || 0) + Math.abs(t.amount);
-            }
-        });
-        const top5 = Object.entries(merchants).sort((a, b) => b[1] - a[1]).slice(0, 5);
-
         const cats = {};
-        currentTx.forEach(t => {
-            if (t.amount < 0) cats[t.category] = (cats[t.category] || 0) + Math.abs(t.amount);
-        });
-
         const sixM = {};
+        
+        // Init 6 derniers mois
         for (let i = 5; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
             const key = `${d.getMonth() + 1}/${d.getFullYear()}`;
             sixM[key] = 0;
         }
+
         transactions.forEach(t => {
-            if (t.amount < 0) {
-                const d = new Date(t.date);
-                const k = `${d.getMonth() + 1}/${d.getFullYear()}`;
-                if (sixM.hasOwnProperty(k)) sixM[k] += Math.abs(t.amount);
+            // Lecture date rapide (format YYYY-MM-DD standard)
+            const [yStr, mStr] = t.date.split('-'); 
+            const tYear = parseInt(yStr);
+            const tMonth = parseInt(mStr) - 1; // 0-indexed
+
+            const isCurrentMonth = tMonth === currentM && tYear === currentY;
+            const isExpense = t.amount < 0;
+
+            if (isCurrentMonth) currentTx.push(t);
+
+            if (isExpense) {
+                const absAmount = Math.abs(t.amount);
+                
+                // Top Marchands (Mois en cours)
+                if (isCurrentMonth) {
+                    const name = t.merchant || t.description;
+                    merchants[name] = (merchants[name] || 0) + absAmount;
+                    cats[t.category] = (cats[t.category] || 0) + absAmount;
+                }
+
+                // Graphique 6 mois
+                const k = `${tMonth + 1}/${tYear}`;
+                if (sixM.hasOwnProperty(k)) sixM[k] += absAmount;
             }
         });
 
+        const top5 = Object.entries(merchants).sort((a, b) => b[1] - a[1]).slice(0, 5);
         return { currentTx, top5, cats, sixM };
-    };
 
-    // Graphiques
+    }, [transactions]); // Se recalcule uniquement si 'transactions' change
+
+    // 3. GRAPHIQUES (Optimisé pour ne pas bloquer le thread)
     useEffect(() => {
         if (view !== 'dashboard') return;
-        const { cats, sixM } = getStats();
-        if(window.bPie instanceof Chart) window.bPie.destroy();
-        if(window.bBar instanceof Chart) window.bBar.destroy();
+        
+        // Petit délai pour laisser le temps à l'interface de s'afficher avant de dessiner les graphs
+        const timer = setTimeout(() => {
+            const { cats, sixM } = stats;
+            if(window.bPie instanceof Chart) window.bPie.destroy();
+            if(window.bBar instanceof Chart) window.bBar.destroy();
 
-        setTimeout(() => {
             if (pieRef.current) {
                 const ctxPie = pieRef.current.getContext('2d');
                 window.bPie = new Chart(ctxPie, {
                     type: 'doughnut',
                     data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b', '#10b981'] }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } }
+                    options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } } // Animation false pour la vitesse
                 });
             }
             if (barRef.current) {
@@ -153,38 +164,48 @@ window.BudgetApp = () => {
                 window.bBar = new Chart(ctxBar, {
                     type: 'bar',
                     data: { labels: Object.keys(sixM), datasets: [{ label: 'Dépenses', data: Object.values(sixM), backgroundColor: '#10b981', borderRadius: 4 }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                    options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }
                 });
             }
-        }, 100);
-    }, [transactions, view]);
+        }, 50); // 50ms délai
+
+        return () => clearTimeout(timer);
+    }, [stats, view]);
+
+    // 4. LISTE FILTRÉE MÉMORISÉE (useMemo)
+    // Évite de parcourir 1000 transactions à chaque render si on ne change pas de filtre
+    const availableYears = useMemo(() => {
+        try { const years = new Set(transactions.map(t => (t.date ? String(t.date).substring(0,4) : '2024'))); return ['Tout', ...Array.from(years).sort().reverse()]; } catch(e) { return ['Tout']; }
+    }, [transactions]);
+
+    const filteredList = useMemo(() => {
+        return transactions.filter(t => {
+            if(!t.date) return false;
+            // Optimisation: Lecture String directe au lieu de Date object
+            const y = t.date.substring(0,4);
+            const m = parseInt(t.date.substring(5,7)).toString(); // "01" -> "1"
+            
+            const yMatch = filterYear === 'Tout' || y === filterYear;
+            const mMatch = filterMonth === 'Tout' || m === filterMonth;
+            return yMatch && mMatch;
+        });
+    }, [transactions, filterYear, filterMonth]);
 
     const openAddModal = () => { 
         setNewTx({ description: '', merchant: '', amount: '', date: new Date().toISOString().split('T')[0], category: 'Autre' }); 
-        setTxType('expense'); // Par défaut, c'est une dépense
+        setTxType('expense'); 
         setIsModalOpen(true); 
     };
 
     const saveManual = async (e) => {
         e.preventDefault();
         if(!newTx.description || !newTx.amount) return;
-        
         const finalMerchant = newTx.merchant || newTx.description;
         const rawAmount = parseFloat(newTx.amount);
-        
-        // Calcul du montant final (Positif si Revenu, Négatif si Dépense)
         const finalAmount = txType === 'income' ? Math.abs(rawAmount) : -Math.abs(rawAmount);
 
-        await window.dbService.add('budget', { 
-            id: Date.now(), 
-            date: newTx.date, 
-            description: newTx.description,
-            merchant: finalMerchant, 
-            amount: finalAmount, 
-            category: newTx.category 
-        });
+        await window.dbService.add('budget', { id: Date.now(), date: newTx.date, description: newTx.description, merchant: finalMerchant, amount: finalAmount, category: newTx.category });
 
-        // Sauvegarde de l'enseigne
         if (newTx.merchant) {
             const catList = merchantDB[newTx.category] || [];
             if (!catList.includes(newTx.merchant)) {
@@ -193,42 +214,20 @@ window.BudgetApp = () => {
                 localStorage.setItem('invest_v5_merchants', JSON.stringify(newDB));
             }
         }
-        
         setIsModalOpen(false);
         window.dispatchEvent(new Event('budget-update'));
     };
 
     const updateTx = async (id, f, v) => {
         const tx = transactions.find(t=>t.id===id);
-        if(tx) {
-            const up = {...tx, [f]:v};
-            await window.dbService.add('budget', up);
-            window.dispatchEvent(new Event('budget-update'));
-        }
+        if(tx) { const up = {...tx, [f]:v}; await window.dbService.add('budget', up); window.dispatchEvent(new Event('budget-update')); }
     };
 
     const deleteTx = async (id) => {
-        if(confirm("Supprimer ?")) {
-            await window.dbService.delete('budget', id);
-            window.dispatchEvent(new Event('budget-update'));
-        }
+        if(confirm("Supprimer ?")) { await window.dbService.delete('budget', id); window.dispatchEvent(new Event('budget-update')); }
     };
 
-    const availableYears = React.useMemo(() => {
-        try { const years = new Set(transactions.map(t => (t.date ? String(t.date).substring(0,4) : '2024'))); return ['Tout', ...Array.from(years).sort().reverse()]; } catch(e) { return ['Tout']; }
-    }, [transactions]);
-
-    const filteredList = transactions.filter(t => {
-        if(!t.date) return false;
-        const d = new Date(t.date);
-        const y = d.getFullYear().toString();
-        const m = (d.getMonth() + 1).toString();
-        const yMatch = filterYear === 'Tout' || y === filterYear;
-        const mMatch = filterMonth === 'Tout' || m === filterMonth;
-        return yMatch && mMatch;
-    });
-
-    const { top5 } = getStats();
+    const { top5 } = stats; // On utilise la version mémorisée
 
     return (
         <div className="flex flex-col h-full bg-slate-50 relative">
@@ -280,7 +279,6 @@ window.BudgetApp = () => {
                 
                 {view === 'list' && (
                     <div className="space-y-4 animate-fade-in pb-10">
-                        {/* Filtres Année / Mois */}
                         <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
                             <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 border-b border-gray-50">
                                 {availableYears.map(y => (
@@ -305,12 +303,14 @@ window.BudgetApp = () => {
                             <h3 className="text-xs font-bold text-gray-400 uppercase">
                                 {filterMonth !== 'Tout' ? monthNames[parseInt(filterMonth)-1] : ''} {filterYear}
                             </h3>
+                            {/* Limite d'affichage pour éviter le lag si > 500 items */}
                             <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{filteredList.length} ops</span>
                         </div>
 
                         <div className="space-y-2">
-                            {filteredList.length === 0 ? (<div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée pour cette période.</p></div>) : (
-                                filteredList.map(t => (
+                            {filteredList.length === 0 ? (<div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée.</p></div>) : (
+                                // OPTIMISATION : On limite l'affichage aux 100 premiers éléments pour ne pas tuer le DOM sur mobile
+                                filteredList.slice(0, 100).map(t => (
                                     <div key={t.id} className={`bg-white p-3 rounded-lg border shadow-sm flex flex-col gap-2 relative group transition ${t.amount > 0 ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-red-500 border-gray-100'}`}>
                                         <div className="flex justify-between items-start gap-2">
                                             <div className="flex-1 overflow-hidden">
@@ -333,12 +333,13 @@ window.BudgetApp = () => {
                                     </div>
                                 ))
                             )}
+                            {filteredList.length > 100 && <p className="text-center text-xs text-gray-400 italic pt-2">Affichage limité aux 100 dernières opérations (utilisez les filtres)</p>}
                         </div>
                     </div>
                 )}
             </div>
-
-            {/* MODALE D'AJOUT / MODIFICATION */}
+            
+            {/* ... (La modale reste identique, je ne la répète pas pour gagner de la place, copiez la depuis votre code précédent) ... */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-fade-in">
@@ -346,51 +347,18 @@ window.BudgetApp = () => {
                             <h3 className="font-bold text-gray-800">Ajout Transaction</h3>
                             <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                         </div>
-                        
                         <form onSubmit={saveManual} className="p-5 space-y-4">
-                            
-                            {/* Sélecteur TYPE (Dépense / Revenu) */}
                             <div className="flex bg-gray-100 p-1 rounded-lg">
-                                <button type="button" onClick={() => setTxType('expense')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${txType === 'expense' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-500'}`}>
-                                    Dépense (-)
-                                </button>
-                                <button type="button" onClick={() => setTxType('income')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${txType === 'income' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500'}`}>
-                                    Revenu (+)
-                                </button>
+                                <button type="button" onClick={() => setTxType('expense')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${txType === 'expense' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-500'}`}>Dépense (-)</button>
+                                <button type="button" onClick={() => setTxType('income')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${txType === 'income' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500'}`}>Revenu (+)</button>
                             </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
-                                <input type="text" required placeholder="Ex: Salaire, Resto..." className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    value={newTx.description} onChange={e => setNewTx({...newTx, description: e.target.value})} />
-                            </div>
+                            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label><input type="text" required placeholder="Ex: Salaire, Resto..." className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={newTx.description} onChange={e => setNewTx({...newTx, description: e.target.value})} /></div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Montant (€)</label>
-                                    <input type="number" step="0.01" required placeholder="0.00" className={`w-full border rounded-lg p-2 text-sm focus:ring-2 outline-none font-bold ${txType==='income'?'text-green-600 focus:ring-green-500':'text-gray-800 focus:ring-red-500'}`}
-                                        value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
-                                    <input type="date" required className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                                        value={newTx.date} onChange={e => setNewTx({...newTx, date: e.target.value})} />
-                                </div>
+                                <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Montant (€)</label><input type="number" step="0.01" required placeholder="0.00" className={`w-full border rounded-lg p-2 text-sm focus:ring-2 outline-none font-bold ${txType==='income'?'text-green-600 focus:ring-green-500':'text-gray-800 focus:ring-red-500'}`} value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} /></div>
+                                <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label><input type="date" required className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={newTx.date} onChange={e => setNewTx({...newTx, date: e.target.value})} /></div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex justify-between">
-                                    <span>Catégorie</span>{newTx.description && <span className="text-emerald-600 text-[10px] italic">Détecté auto</span>}
-                                </label>
-                                <select className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white font-bold text-gray-700"
-                                    value={newTx.category} onChange={e => setNewTx({...newTx, category: e.target.value})}>
-                                    {Object.keys(DETECTION_KEYWORDS).concat(['Autre']).map(c => (<option key={c} value={c}>{c}</option>))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Détail / Enseigne (Optionnel)</label>
-                                <input type="text" list="merchants-list" placeholder="Sélectionner ou écrire..." className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    value={newTx.merchant} onChange={e => setNewTx({...newTx, merchant: e.target.value})} />
-                                <datalist id="merchants-list">{(merchantDB[newTx.category] || []).map((m, idx) => (<option key={idx} value={m} />))}</datalist>
-                            </div>
+                            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex justify-between"><span>Catégorie</span>{newTx.description && <span className="text-emerald-600 text-[10px] italic">Détecté auto</span>}</label><select className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white font-bold text-gray-700" value={newTx.category} onChange={e => setNewTx({...newTx, category: e.target.value})}>{Object.keys(DETECTION_KEYWORDS).concat(['Autre']).map(c => (<option key={c} value={c}>{c}</option>))}</select></div>
+                            <div><label className="block text-xs font-bold text-gray-500 uppercase mb-1">Détail / Enseigne</label><input type="text" list="merchants-list" placeholder="Sélectionner ou écrire..." className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={newTx.merchant} onChange={e => setNewTx({...newTx, merchant: e.target.value})} /><datalist id="merchants-list">{(merchantDB[newTx.category] || []).map((m, idx) => (<option key={idx} value={m} />))}</datalist></div>
                             <button type="submit" className={`w-full text-white py-3 rounded-xl font-bold transition mt-2 ${txType==='income'?'bg-green-600 hover:bg-green-700':'bg-red-500 hover:bg-red-600'}`}>Valider</button>
                         </form>
                     </div>
