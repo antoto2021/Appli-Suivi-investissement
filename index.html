@@ -101,10 +101,11 @@
                     </div>
 
                     <div class="grid grid-cols-3 gap-2 mt-6 pt-4 border-t border-gray-100">
-                        <div class="text-center border-r border-gray-100 px-1">
-                            <p class="text-[10px] text-green-600 font-bold uppercase mb-1">Revenus</p>
+                        <div onclick="window.dispatchEvent(new Event('open-income-modal'))" class="text-center border-r border-gray-100 px-1 cursor-pointer hover:bg-emerald-50 rounded transition py-1 group active:scale-95">
+                            <p class="text-[10px] text-green-600 font-bold uppercase mb-1 group-hover:text-green-700 flex justify-center gap-1 items-center">
+                                Revenus <i class="fa-solid fa-plus-circle text-xs opacity-50 group-hover:opacity-100"></i></p>
                             <p class="text-sm md:text-lg font-bold text-gray-800 truncate" id="bankIncome">0 €</p>
-                        </div>
+                        </div>                       
                         <div class="text-center border-r border-gray-100 px-1">
                             <p class="text-[10px] text-red-500 font-bold uppercase mb-1">Dépenses</p>
                             <p class="text-sm md:text-lg font-bold text-gray-800 truncate" id="bankExpenses">0 €</p>
