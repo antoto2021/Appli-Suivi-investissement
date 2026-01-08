@@ -1,3 +1,6 @@
+// js/budget.js
+
+// On suppose que dbService est global (window.dbService)
 const { useState, useEffect, useRef } = React;
 
 const DETECTION_KEYWORDS = {
@@ -6,18 +9,14 @@ const DETECTION_KEYWORDS = {
     'Transport': ['sncf', 'train', 'navigo', 'ratp', 'uber', 'bolt', 'taxi', 'essence', 'total', 'esso', 'bp', 'shell', 'peage', 'parking', 'dott', 'lime', 'scooter'],
     'Logement': ['loyer', 'edf', 'engie', 'eau', 'internet', 'bouygues', 'sfr', 'orange', 'free', 'assurance', 'taxe'],
     'Loisirs': ['netflix', 'spotify', 'cinema', 'ugc', 'gaumont', 'sport', 'fitness', 'basic fit', 'abonnement', 'shotgun', 'place', 'concert', 'al miraath'],
-    'Salaire': ['salaire', 'virement', 'caf', 'cpam', 'remboursement', 'solde'],
+    'Salaire': ['salaire', 'virement', 'caf', 'cpam', 'remboursement', 'solde', 'pôle emploi', 'revenu'],
     'Investissement': ['bitstack', 'bourse', 'pea', 'cto', 'trade', 'republic', 'crypto', 'binance', 'coinbase', 'bricks', 'la premiere brique']
 };
 
 const DEFAULT_MERCHANTS = {
-    'Alimentation': ['Super U', 'Lidl', 'Carrefour', 'Leclerc', 'Auchan', 'MS Nanterre', 'Al Miraath'],
-    'Restauration': ['McDonald\'s', 'Burger King', 'Uber Eats', 'O Tacos', 'KFC', 'Starbucks', 'Crous', 'Spiti Sou', 'Le XV'],
-    'Transport': ['SNCF', 'Total Energies', 'Esso', 'Uber', 'Dott', 'RATP'],
-    'Logement': ['EDF', 'Bouygues Telecom', 'Loyer'],
-    'Loisirs': ['Netflix', 'Shotgun', 'UGC', 'Apple Services'],
-    'Salaire': ['Salaire', 'CAF', 'CPAM'],
-    'Investissement': ['Bitstack', 'Trade Republic', 'La Première Brique'],
+    'Alimentation': ['Super U', 'Lidl', 'Carrefour', 'Leclerc', 'Auchan'],
+    'Restauration': ['McDonald\'s', 'Burger King', 'Uber Eats'],
+    'Salaire': ['Virement', 'Employeur', 'CAF', 'Remboursement'],
     'Autre': ['Amazon', 'Fnac']
 };
 
@@ -28,6 +27,9 @@ window.BudgetApp = () => {
     const [filterMonth, setFilterMonth] = useState('Tout');
     const [isModalOpen, setIsModalOpen] = useState(false);
     
+    // Nouvel état : type de transaction (expense ou income)
+    const [txType, setTxType] = useState('expense'); 
+
     const [merchantDB, setMerchantDB] = useState(() => {
         const saved = localStorage.getItem('invest_v5_merchants');
         return saved ? JSON.parse(saved) : DEFAULT_MERCHANTS;
@@ -38,11 +40,12 @@ window.BudgetApp = () => {
     const pieRef = useRef(null);
     const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
+    // Chargement initial
     useEffect(() => {
         const load = async () => {
             try {
-                await dbService.init();
-                const data = await dbService.getAll('budget');
+                await window.dbService.init();
+                const data = await window.dbService.getAll('budget');
                 const safeData = (data || []).map(t => ({
                     ...t,
                     date: t.date || new Date().toISOString().split('T')[0],
@@ -59,6 +62,24 @@ window.BudgetApp = () => {
         return () => window.removeEventListener('budget-update', load);
     }, []);
 
+    // Écouteur pour ouvrir la modal "Revenus" depuis l'extérieur (index.html)
+    useEffect(() => {
+        const handleOpenIncome = () => {
+            setNewTx({ 
+                description: 'Virement', 
+                merchant: '', 
+                amount: '', 
+                date: new Date().toISOString().split('T')[0], 
+                category: 'Salaire' 
+            });
+            setTxType('income'); // On force le mode Revenu
+            setIsModalOpen(true);
+        };
+        window.addEventListener('open-income-modal', handleOpenIncome);
+        return () => window.removeEventListener('open-income-modal', handleOpenIncome);
+    }, []);
+
+    // Détection auto catégorie
     useEffect(() => {
         if (!newTx.description) return;
         const text = newTx.description.toLowerCase();
@@ -111,6 +132,7 @@ window.BudgetApp = () => {
         return { currentTx, top5, cats, sixM };
     };
 
+    // Graphiques
     useEffect(() => {
         if (view !== 'dashboard') return;
         const { cats, sixM } = getStats();
@@ -122,7 +144,7 @@ window.BudgetApp = () => {
                 const ctxPie = pieRef.current.getContext('2d');
                 window.bPie = new Chart(ctxPie, {
                     type: 'doughnut',
-                    data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b'] }] },
+                    data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b', '#10b981'] }] },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } }
                 });
             }
@@ -137,30 +159,39 @@ window.BudgetApp = () => {
         }, 100);
     }, [transactions, view]);
 
-    const openAddModal = () => { setNewTx({ description: '', merchant: '', amount: '', date: new Date().toISOString().split('T')[0], category: 'Autre' }); setIsModalOpen(true); };
+    const openAddModal = () => { 
+        setNewTx({ description: '', merchant: '', amount: '', date: new Date().toISOString().split('T')[0], category: 'Autre' }); 
+        setTxType('expense'); // Par défaut, c'est une dépense
+        setIsModalOpen(true); 
+    };
 
     const saveManual = async (e) => {
         e.preventDefault();
         if(!newTx.description || !newTx.amount) return;
-        const finalMerchant = newTx.merchant || newTx.description; 
-        await dbService.add('budget', { 
-            id: Date.now(), date: newTx.date, description: newTx.description,
-            merchant: finalMerchant, amount: -Math.abs(parseFloat(newTx.amount)), category: newTx.category 
+        
+        const finalMerchant = newTx.merchant || newTx.description;
+        const rawAmount = parseFloat(newTx.amount);
+        
+        // Calcul du montant final (Positif si Revenu, Négatif si Dépense)
+        const finalAmount = txType === 'income' ? Math.abs(rawAmount) : -Math.abs(rawAmount);
+
+        await window.dbService.add('budget', { 
+            id: Date.now(), 
+            date: newTx.date, 
+            description: newTx.description,
+            merchant: finalMerchant, 
+            amount: finalAmount, 
+            category: newTx.category 
         });
 
-        if (newTx.merchant && merchantDB[newTx.category]) {
-            const currentList = merchantDB[newTx.category];
-            const exists = currentList.some(m => m.toLowerCase() === newTx.merchant.toLowerCase());
-            if (!exists) {
-                const updatedList = [...currentList, newTx.merchant].sort();
-                const newDB = { ...merchantDB, [newTx.category]: updatedList };
+        // Sauvegarde de l'enseigne
+        if (newTx.merchant) {
+            const catList = merchantDB[newTx.category] || [];
+            if (!catList.includes(newTx.merchant)) {
+                const newDB = { ...merchantDB, [newTx.category]: [...catList, newTx.merchant].sort() };
                 setMerchantDB(newDB);
                 localStorage.setItem('invest_v5_merchants', JSON.stringify(newDB));
             }
-        } else if (newTx.merchant && !merchantDB[newTx.category]) {
-            const newDB = { ...merchantDB, [newTx.category]: [newTx.merchant] };
-            setMerchantDB(newDB);
-            localStorage.setItem('invest_v5_merchants', JSON.stringify(newDB));
         }
         
         setIsModalOpen(false);
@@ -171,13 +202,14 @@ window.BudgetApp = () => {
         const tx = transactions.find(t=>t.id===id);
         if(tx) {
             const up = {...tx, [f]:v};
-            await dbService.add('budget', up);
+            await window.dbService.add('budget', up);
             window.dispatchEvent(new Event('budget-update'));
         }
     };
+
     const deleteTx = async (id) => {
         if(confirm("Supprimer ?")) {
-            await dbService.delete('budget', id);
+            await window.dbService.delete('budget', id);
             window.dispatchEvent(new Event('budget-update'));
         }
     };
@@ -202,24 +234,16 @@ window.BudgetApp = () => {
         <div className="flex flex-col h-full bg-slate-50 relative">
             <div className="flex justify-between items-center p-3 md:p-4 bg-white shadow-sm mb-2 sticky top-0 z-20">
                 <div className="flex gap-2 items-center overflow-x-auto no-scrollbar">
-                    {/* On cache le titre "Ma Banque" sur mobile (hidden md:block) pour gagner de la place */}
                     <span className="font-bold text-gray-800 mr-2 hidden md:block">Ma Banque</span>
-                    
                     <button onClick={()=>setView('dashboard')} className={`px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition whitespace-nowrap ${view==='dashboard'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>
-                        {/* Texte court sur mobile / Long sur PC */}
-                        <span className="md:hidden">Vues</span>
-                        <span className="hidden md:inline">Vue d'ensemble</span>
+                        <span className="md:hidden">Vues</span><span className="hidden md:inline">Vue d'ensemble</span>
                     </button>
-                    
                     <button onClick={()=>setView('list')} className={`px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition whitespace-nowrap ${view==='list'?'bg-emerald-100 text-emerald-700':'text-gray-500 hover:bg-gray-100'}`}>
-                        <span className="md:hidden">Hist.</span>
-                        <span className="hidden md:inline">Historique</span>
+                        <span className="md:hidden">Hist.</span><span className="hidden md:inline">Historique</span>
                     </button>
                 </div>
-                
                 <button onClick={openAddModal} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow flex-shrink-0 ml-2">
-                    <span className="md:hidden">+ Add</span>
-                    <span className="hidden md:inline">+ Dépense</span>
+                    <span className="md:hidden">+ Add</span><span className="hidden md:inline">+ Dépense</span>
                 </button>
             </div>
 
@@ -256,6 +280,7 @@ window.BudgetApp = () => {
                 
                 {view === 'list' && (
                     <div className="space-y-4 animate-fade-in pb-10">
+                        {/* Filtres Année / Mois */}
                         <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
                             <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 border-b border-gray-50">
                                 {availableYears.map(y => (
@@ -286,20 +311,22 @@ window.BudgetApp = () => {
                         <div className="space-y-2">
                             {filteredList.length === 0 ? (<div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée pour cette période.</p></div>) : (
                                 filteredList.map(t => (
-                                    <div key={t.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex flex-col gap-2 relative group hover:border-emerald-200 transition">
+                                    <div key={t.id} className={`bg-white p-3 rounded-lg border shadow-sm flex flex-col gap-2 relative group transition ${t.amount > 0 ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-red-500 border-gray-100'}`}>
                                         <div className="flex justify-between items-start gap-2">
                                             <div className="flex-1 overflow-hidden">
                                                 <input type="text" value={t.merchant || t.description} readOnly className="font-bold text-gray-700 bg-transparent w-full focus:outline-none text-sm truncate" />
                                                 <div className="text-[10px] text-gray-400 italic truncate">{t.description}</div>
                                             </div>
-                                            <input type="number" step="0.01" value={t.amount} onChange={(e)=>updateTx(t.id,'amount',parseFloat(e.target.value))} className={`text-right w-20 font-mono font-bold bg-transparent focus:outline-none rounded ${t.amount<0?'text-slate-700':'text-emerald-600'}`} />
+                                            <div className={`text-right w-24 font-mono font-bold ${t.amount < 0 ? 'text-slate-700' : 'text-green-600'}`}>
+                                                {t.amount > 0 ? '+' : ''}{t.amount.toFixed(2)} €
+                                            </div>
                                         </div>
                                         <div className="flex justify-between items-center text-xs mt-1">
                                             <div className="flex gap-2 items-center flex-wrap">
-                                                <input type="date" value={t.date} onChange={(e)=>updateTx(t.id,'date',e.target.value)} className="text-gray-400 bg-transparent border-none p-0" />
-                                                <select value={t.category} onChange={(e)=>updateTx(t.id,'category',e.target.value)} className="text-[10px] px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100 outline-none">
-                                                    {Object.keys(DETECTION_KEYWORDS).concat(['Autre', 'Import']).map(c=><option key={c} value={c}>{c}</option>)}
-                                                </select>
+                                                <div className="text-gray-400">{t.date}</div>
+                                                <span className="text-[10px] px-2 py-0.5 rounded bg-gray-50 text-gray-500 uppercase font-bold border border-gray-100">
+                                                    {t.category}
+                                                </span>
                                             </div>
                                             <button onClick={()=>deleteTx(t.id)} className="text-gray-300 hover:text-red-500 px-2"><i className="fa-solid fa-trash"></i></button>
                                         </div>
@@ -311,23 +338,36 @@ window.BudgetApp = () => {
                 )}
             </div>
 
+            {/* MODALE D'AJOUT / MODIFICATION */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-fade-in">
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                            <h3 className="font-bold text-gray-800">Ajout Intelligent</h3>
+                            <h3 className="font-bold text-gray-800">Ajout Transaction</h3>
                             <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                         </div>
+                        
                         <form onSubmit={saveManual} className="p-5 space-y-4">
+                            
+                            {/* Sélecteur TYPE (Dépense / Revenu) */}
+                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                                <button type="button" onClick={() => setTxType('expense')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${txType === 'expense' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-500'}`}>
+                                    Dépense (-)
+                                </button>
+                                <button type="button" onClick={() => setTxType('income')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition ${txType === 'income' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500'}`}>
+                                    Revenu (+)
+                                </button>
+                            </div>
+
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
-                                <input type="text" required placeholder="Ex: Resto, Courses..." className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                <input type="text" required placeholder="Ex: Salaire, Resto..." className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                                     value={newTx.description} onChange={e => setNewTx({...newTx, description: e.target.value})} />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Montant (€)</label>
-                                    <input type="number" step="0.01" required placeholder="0.00" className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    <input type="number" step="0.01" required placeholder="0.00" className={`w-full border rounded-lg p-2 text-sm focus:ring-2 outline-none font-bold ${txType==='income'?'text-green-600 focus:ring-green-500':'text-gray-800 focus:ring-red-500'}`}
                                         value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} />
                                 </div>
                                 <div>
@@ -346,12 +386,12 @@ window.BudgetApp = () => {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Enseigne (Optionnel)</label>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Détail / Enseigne (Optionnel)</label>
                                 <input type="text" list="merchants-list" placeholder="Sélectionner ou écrire..." className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                                     value={newTx.merchant} onChange={e => setNewTx({...newTx, merchant: e.target.value})} />
                                 <datalist id="merchants-list">{(merchantDB[newTx.category] || []).map((m, idx) => (<option key={idx} value={m} />))}</datalist>
                             </div>
-                            <button type="submit" className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition mt-2">Valider</button>
+                            <button type="submit" className={`w-full text-white py-3 rounded-xl font-bold transition mt-2 ${txType==='income'?'bg-green-600 hover:bg-green-700':'bg-red-500 hover:bg-red-600'}`}>Valider</button>
                         </form>
                     </div>
                 </div>
