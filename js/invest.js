@@ -253,28 +253,46 @@ window.app = {
         if(!ctx) return;
         if(this.charts.proj) this.charts.proj.destroy();
 
+        // 1. Récupération de la durée choisie par l'utilisateur
         const projectionYears = parseInt(document.getElementById('projYears')?.value) || 20;
+        
         const currentYear = new Date().getFullYear();
         const txYears = this.transactions.map(t => new Date(t.date).getFullYear());
         const startYear = txYears.length > 0 ? Math.min(...txYears) : currentYear;
+        
+        // Calcul précis de l'ancienneté du portefeuille (en années décimales)
+        const dates = this.transactions.map(t => new Date(t.date).getTime());
+        const firstTimestamp = dates.length > 0 ? Math.min(...dates) : new Date().getTime();
+        const yearsElapsed = (new Date().getTime() - firstTimestamp) / (1000 * 60 * 60 * 24 * 365.25);
+
         const totalYears = (currentYear - startYear) + projectionYears;
         const labels = Array.from({length: totalYears + 1}, (_, i) => startYear + i);
 
         const kpis = this.calcKPIs();
-        let annualRate = 0.05; 
-        if (kpis.invested > 0) {
-            const yearsSinceStart = Math.max(1, currentYear - startYear);
+        
+        // 2. CORRECTION DU TAUX (Calculateur intelligent)
+        // Par défaut, on prend 8% (moyenne historique bourse)
+        let annualRate = 0.08; 
+        
+        if (kpis.invested > 0 && yearsElapsed > 0.5) {
+            // Si le portefeuille a plus de 6 mois, on calcule le vrai CAGR
             const ratio = kpis.currentVal / kpis.invested;
-            if(ratio > 0) annualRate = Math.pow(ratio, 1/yearsSinceStart) - 1;
-            annualRate = Math.max(-0.20, Math.min(0.30, annualRate));
+            // Formule CAGR : (Valeur Finale / Valeur Initiale)^(1/Années) - 1
+            const calculatedCagr = Math.pow(ratio, 1/yearsElapsed) - 1;
+            
+            // On "bride" le taux entre -10% et +15% pour éviter les projections délirantes
+            // (ex: si vous avez fait +20% en 1 mois, on ne projette pas +240% par an)
+            annualRate = Math.max(-0.10, Math.min(0.15, calculatedCagr));
         }
 
         const dataInvested = [];
         const dataValue = []; 
-        let lastInvested = 0, lastValue = 0;
+        let lastInvested = 0;
+        let lastValue = 0;
 
         labels.forEach(year => {
             if (year <= currentYear) {
+                // --- PARTIE PASSÉ (Historique) ---
                 let investedAtYear = 0;
                 this.transactions.forEach(t => {
                     if(new Date(t.date).getFullYear() <= year) {
@@ -282,43 +300,97 @@ window.app = {
                         if(t.op==='Vente') investedAtYear -= t.qty * t.price;
                     }
                 });
+                
                 dataInvested.push(investedAtYear);
                 lastInvested = investedAtYear;
 
                 if (year === currentYear) {
+                    // Pour l'année en cours, on prend la VRAIE valeur actuelle
                     dataValue.push(kpis.currentVal);
                     lastValue = kpis.currentVal;
                 } else if (kpis.invested > 0) {
+                    // Pour le passé, on reconstruit une courbe lissée proportionnelle
                     const historicalRatio = kpis.currentVal / kpis.invested;
                     dataValue.push(investedAtYear * historicalRatio); 
                 } else {
                     dataValue.push(0);
                 }
             } else {
+                // --- PARTIE FUTUR (Projection) ---
+                // On garde le montant investi constant (on suppose 0 nouvel apport pour voir l'effet pur des intérêts)
                 dataInvested.push(lastInvested);
+                
+                // Formule Intérêts Composés : Valeur N-1 * (1 + Taux)
                 lastValue = lastValue * (1 + annualRate);
                 dataValue.push(lastValue);
             }
         });
 
         const rateTxt = (annualRate * 100).toFixed(2) + '%';
+        
         this.charts.proj = new Chart(ctx, {
             type: 'line',
             data: { 
                 labels, 
                 datasets: [
-                    { label: `Trajectoire (Taux annuel ${rateTxt})`, data: dataValue, borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', fill: true, tension: 0.4 },
-                    { label: 'Historique Estimé', data: dataValue.slice(0, (currentYear - startYear) + 1), borderColor: '#3b82f6', borderDash: [2, 2], fill: false },
-                    { label: 'Cumul Investi (Cash)', data: dataInvested, borderColor: '#f97316', borderDash: [5, 5], backgroundColor: 'transparent', pointRadius: 0 }
+                    { 
+                        label: `Trajectoire (${rateTxt}/an)`, 
+                        data: dataValue, 
+                        borderColor: '#8b5cf6', // Violet
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)', 
+                        fill: true, 
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 6
+                    },
+                    { 
+                        label: 'Cash Investi', 
+                        data: dataInvested, 
+                        borderColor: '#94a3b8', // Gris
+                        borderDash: [5, 5], 
+                        borderWidth: 2,
+                        backgroundColor: 'transparent', 
+                        pointRadius: 0,
+                        pointHoverRadius: 0
+                    }
                 ] 
             },
-            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { y: { ticks: { callback: v => (v/1000).toFixed(0)+'k€' } } } }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                interaction: { mode: 'index', intersect: false }, 
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                if (context.parsed.y !== null) {
+                                    label += new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(context.parsed.y);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: { 
+                    y: { 
+                        ticks: { callback: v => (v/1000).toFixed(0)+'k€' },
+                        grid: { color: '#f3f4f6' }
+                    },
+                    x: {
+                        grid: { display: false }
+                    }
+                } 
+            }
         });
         
+        // On relance les autres graphiques annexes si besoin
         this.renderYearlyBar();
         this.renderSectorChart();
     },
-
+    
     renderYearlyBar: function() {
         const ctx = document.getElementById('yearlyBarChart')?.getContext('2d');
         if(!ctx) return;
@@ -581,16 +653,33 @@ window.app = {
                 let count = 0;
                 
                 for(const row of json) {
-                    let d = row['Date']||row['Date_Entrée'];
-                    if(typeof d==='number') d = new Date(Math.round((d-25569)*86400*1000)).toISOString().split('T')[0];
-                    
-                    let detectedTicker = row['Ticker'] || '';
-                    if (!detectedTicker) {
+                    // 1. Gestion de la Date
+                    let d = row['Date'] || row['Date_Entrée'];
+                    if(typeof d === 'number') {
+                        // Conversion date Excel (nombre) vers JS
+                        d = new Date(Math.round((d - 25569) * 86400 * 1000)).toISOString().split('T')[0];
+                    }
+
+                    // 2. Gestion Intelligente du Ticker
+                    // Priorité 1 : Le ticker est dans le fichier Excel (Colonne 'Ticker')
+                    let finalTicker = '';
+                    if (row['Ticker'] && typeof row['Ticker'] === 'string') {
+                        finalTicker = row['Ticker'].trim();
+                    }
+
+                    // Priorité 2 : Si pas de ticker dans le fichier, on tente la détection auto via le Nom
+                    if (!finalTicker) {
                         const lowerName = (row['Nom actif'] || '').toLowerCase();
-                        for (const [key, ticker] of Object.entries(this.tickerDB)) {
-                            if (lowerName.includes(key)) { detectedTicker = ticker; break; }
+                        for (const [key, t] of Object.entries(this.tickerDB)) {
+                            if (lowerName.includes(key)) { 
+                                finalTicker = t; 
+                                break; 
+                            }
                         }
                     }
+
+                    // 3. Gestion du Secteur (Colonne 'Secteur' ou 'Sector')
+                    const sector = row['Secteur'] || row['Sector'] || '';
 
                     const tx = {
                         date: d || new Date().toISOString().split('T')[0],
@@ -599,13 +688,21 @@ window.app = {
                         qty: parseFloat(row['Quantité']) || 0,
                         price: parseFloat(row['Prix unitaire']) || 0,
                         account: row['Compte'] || '',
-                        ticker: detectedTicker
+                        ticker: finalTicker, // Le ticker déterminé ci-dessus
+                        sector: sector       // Le secteur lu dans le fichier
                     };
-                    if(tx.qty > 0) { await this.addTransaction(tx); count++; }
+
+                    if(tx.qty > 0 || tx.op === 'Dividende') { 
+                        await this.addTransaction(tx); 
+                        count++; 
+                    }
                 }
-                this.toast(`${count} importés`); this.renderTable();
-            } catch(e) { alert("Erreur import Excel: " + e.message); }
-            e.target.value = '';
+                this.toast(`${count} importés avec succès`); 
+                this.renderTable();
+            } catch(e) { 
+                alert("Erreur import Excel: " + e.message); 
+            }
+            e.target.value = ''; // Reset pour permettre de réimporter le même fichier si besoin
         };
         r.readAsArrayBuffer(e.target.files[0]);
     },
