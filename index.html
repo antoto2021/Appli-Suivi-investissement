@@ -224,18 +224,98 @@
         </section>
 
         <section id="projections-view" class="hidden animate-fade-in">
-             <div class="flex items-center justify-between mb-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <div class="breadcrumb">
-                    <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span onclick="window.app.nav('dashboard')">Investissements</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Projections</span>
+                    <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> 
+                    <span onclick="window.app.nav('dashboard')">Investissements</span> <i class="fa-solid fa-chevron-right text-xs"></i> 
+                    <span class="active">Simulateur</span>
                 </div>
-                 <button onclick="window.app.nav('dashboard')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">Retour</button>
+                <div class="flex gap-2">
+                     <button onclick="window.app.nav('dashboard')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded font-bold">Retour</button>
+                     <button onclick="window.app.nav('dividends')" class="btn-secondary py-2 text-emerald-600 border-emerald-200"><i class="fa-solid fa-coins mr-1"></i> Dividendes</button>
+                </div>
             </div>
-            <div class="bg-white p-6 rounded-xl shadow-sm mb-8">
-                <div class="chart-container" style="height: 300px;"><canvas id="mainProjectionChart"></canvas></div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 mb-8">
+                <div class="flex items-center gap-2 mb-4 border-b border-gray-100 pb-2">
+                    <div class="bg-blue-100 text-blue-600 w-8 h-8 rounded-full flex items-center justify-center"><i class="fa-solid fa-sliders"></i></div>
+                    <h3 class="font-bold text-gray-800">Paramètres de Simulation</h3>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Capital Actuel</label>
+                        <div class="relative">
+                            <input type="number" id="simInitial" class="w-full font-bold text-gray-700 border-b border-gray-200 focus:border-blue-500 outline-none bg-transparent py-1" onchange="window.app.updateSimulations()">
+                            <span class="absolute right-0 top-1 text-xs text-gray-400">€</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Ajout Mensuel</label>
+                        <div class="relative">
+                            <input type="number" id="simMonthly" class="w-full font-bold text-emerald-600 border-b border-gray-200 focus:border-emerald-500 outline-none bg-transparent py-1" onchange="window.app.updateSimulations()">
+                            <span class="absolute right-0 top-1 text-xs text-gray-400">€/mois</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Rendement Annuel</label>
+                        <div class="relative">
+                            <input type="number" step="0.1" id="simYield" value="8" class="w-full font-bold text-blue-600 border-b border-gray-200 focus:border-blue-500 outline-none bg-transparent py-1" onchange="window.app.updateSimulations()">
+                            <span class="absolute right-0 top-1 text-xs text-gray-400">%</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Horizon</label>
+                        <div class="relative">
+                            <input type="number" id="simYears" value="20" class="w-full font-bold text-purple-600 border-b border-gray-200 focus:border-purple-500 outline-none bg-transparent py-1" onchange="window.app.updateSimulations()">
+                            <span class="absolute right-0 top-1 text-xs text-gray-400">ans</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-50">
+                     <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Inflation Estimée</label>
+                        <input type="range" id="simInflation" min="0" max="10" step="0.5" value="3" class="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer" oninput="document.getElementById('lblInf').innerText = this.value + '%'; window.app.updateSimulations()">
+                        <div class="text-right text-xs text-gray-500 font-mono" id="lblInf">3%</div>
+                    </div>
+                     <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Taux de Retrait (Rente)</label>
+                        <input type="range" id="simWithdrawal" min="1" max="10" step="0.5" value="4" class="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer" oninput="document.getElementById('lblWith').innerText = this.value + '%'; window.app.updateSimulations()">
+                        <div class="text-right text-xs text-gray-500 font-mono" id="lblWith">4%</div>
+                    </div>
+                </div>
             </div>
-             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="bg-white p-6 rounded-xl shadow-sm"><h3 class="chart-title">Cashflow Annuel</h3><div class="chart-container"><canvas id="yearlyBarChart"></canvas></div></div>
-                <div class="bg-white p-6 rounded-xl shadow-sm"><h3 class="chart-title">Fréquence</h3><div class="chart-container"><canvas id="frequencyChart"></canvas></div></div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm mb-8 border border-gray-100">
+                <div class="flex justify-between items-end mb-4">
+                     <div>
+                        <h3 class="text-lg font-bold text-gray-800">Projection Patrimoniale</h3>
+                        <p class="text-xs text-gray-500">Pouvoir d'achat futur (ajusté inflation)</p>
+                     </div>
+                     <div class="text-right">
+                        <p class="text-xs text-gray-400 uppercase">Patrimoine Final (Réel)</p>
+                        <p class="text-2xl font-black text-purple-600" id="finalRealWealth">0 €</p>
+                     </div>
+                </div>
+                <div class="chart-container" style="height: 350px;"><canvas id="wealthSimulatorChart"></canvas></div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm mb-8 border border-gray-100">
+                <div class="flex justify-between items-end mb-4">
+                     <div>
+                        <h3 class="text-lg font-bold text-gray-800">Effet Boule de Neige</h3>
+                        <p class="text-xs text-gray-500">Répartition du capital final</p>
+                     </div>
+                     <div class="text-right">
+                        <p class="text-xs text-gray-400 uppercase">Total Intérêts Générés</p>
+                        <p class="text-2xl font-black text-emerald-500" id="totalInterests">0 €</p>
+                     </div>
+                </div>
+                <div class="chart-container" style="height: 350px;"><canvas id="compoundInterestChart"></canvas></div>
             </div>
         </section>
 
