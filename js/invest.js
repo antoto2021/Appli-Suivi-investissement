@@ -97,7 +97,7 @@ window.app = {
         document.getElementById('bankInvest').textContent = `-${invested.toFixed(2)} €`;
     },
 
-    nav: function(id) {
+        nav: function(id) {
         // Cacher toutes les sections
         document.querySelectorAll('main > section').forEach(el => {
             el.classList.add('hidden');
@@ -105,27 +105,37 @@ window.app = {
         });
         
         // Afficher la section demandée
-        // Si on demande 'bank', on affiche bank-view
-        // Si on demande 'dashboard', on affiche dashboard-view, etc.
         const target = document.getElementById(id + '-view');
         if(target) {
             target.classList.remove('hidden');
             target.classList.add('block');
         } else {
-            // Fallback: Si on demande un sous-onglet investissement (ex: assets)
-            // On affiche quand même la section, car j'ai gardé les IDs assets-view, transactions-view dans le HTML
+            // Fallback pour les sous-menus (assets, transactions...)
             const subTarget = document.getElementById(id + '-view');
             if(subTarget) subTarget.classList.remove('hidden');
         }
         
         // Logique spécifique par vue
-        if(id === 'dashboard') { this.calcKPIs(); setTimeout(() => { this.renderPie(); this.renderSectorChart(); this.renderYearlyBar(); }, 100); }
+        if(id === 'dashboard') { 
+            this.calcKPIs(); 
+            setTimeout(() => { 
+                this.renderPie(); 
+                this.renderSectorChart(); 
+                this.renderYearlyBar(); 
+            }, 100); 
+        }
         if(id === 'assets') this.renderAssets();
         if(id === 'transactions') this.renderTable();
-        if(id === 'projections') { this.initSimulatorInputs(); setTimeout(() => this.renderProjections(), 100); }
+        
+        // --- C'EST ICI QUE CA CHANGE POUR PROJECTIONS ---
+        if(id === 'projections') { 
+            this.initSimulatorInputs(); 
+            // On force la mise à jour des 2 nouveaux graphiques
+            requestAnimationFrame(() => this.updateSimulations()); 
+        }
+        
         if(id === 'bank') { 
             this.renderBankSummary(); 
-            // On déclenche aussi un petit event pour React au cas où
             window.dispatchEvent(new Event('budget-update'));
         }
         
@@ -274,19 +284,24 @@ window.app = {
         return Math.round(totalInvested / effectiveMonths);
     },
 
-    // 2. Initialiser les champs du simulateur avec les données réelles
+        // 2. Initialiser les champs du simulateur avec les données réelles
     initSimulatorInputs: function() {
-        if(this.simData.initialized) return;
-        
-        const kpis = this.calcKPIs();
-        const avgSave = this.calcAverageSavings();
-
-        // Remplir les inputs
+        // On force la récupération des valeurs même si déjà initialisé
         const elInit = document.getElementById('simInitial');
         const elMonth = document.getElementById('simMonthly');
         
-        if(elInit) elInit.value = Math.round(kpis.currentVal);
-        if(elMonth) elMonth.value = avgSave;
+        let currentVal = 0; 
+        let avgSave = 100;
+
+        try {
+            const kpis = this.calcKPIs();
+            currentVal = Math.round(kpis.currentVal || 0);
+            avgSave = this.calcAverageSavings() || 100;
+        } catch(e) { console.warn("Données non prêtes", e); }
+
+        // Remplissage si les champs sont vides
+        if(elInit && !elInit.value) elInit.value = currentVal;
+        if(elMonth && !elMonth.value) elMonth.value = avgSave;
 
         this.simData.initialized = true;
     },
@@ -310,42 +325,44 @@ window.app = {
         const monthly = parseFloat(document.getElementById('simMonthly')?.value) || 0;
         const yieldPct = parseFloat(document.getElementById('simYield')?.value) / 100 || 0.08;
         const years = parseInt(document.getElementById('simYears')?.value) || 20;
-        const inflation = parseFloat(document.getElementById('simInflation')?.value) / 100 || 0; // Si 0, pas d'ajustement
+        const inflation = parseFloat(document.getElementById('simInflation')?.value) / 100 || 0;
+        const withdrawalRate = parseFloat(document.getElementById('simWithdrawal')?.value) / 100 || 0.04;
         
         const labels = [];
         const dataNominal = [];
         const dataReal = [];
         const currentYear = new Date().getFullYear();
 
-        // Calculs basés sur une composition MENSUELLE (plus précis, comme Finary)
         let balance = initial;
         const monthlyRate = yieldPct / 12;
 
         for(let i = 0; i <= years; i++) {
             labels.push(currentYear + i);
-            
-            // Valeur Nominale (Ce qui sera affiché sur le compte en banque)
             dataNominal.push(balance);
 
-            // Valeur Réelle (Ce que ça vaut en pouvoir d'achat d'aujourd'hui)
-            // Formule : ValeurNominale / (1 + inflation)^année
+            // Valeur Réelle (Ajustée inflation)
             const realValue = balance / Math.pow(1 + inflation, i);
             dataReal.push(realValue);
 
-            // Projection pour l'année suivante (12 mois d'intérêts composés + versements)
+            // Calcul année suivante (mois par mois)
             if (i < years) {
                 for(let m = 0; m < 12; m++) {
-                    balance += monthly;           // On ajoute l'épargne du mois
-                    balance *= (1 + monthlyRate); // On applique l'intérêt du mois
+                    balance += monthly;
+                    balance *= (1 + monthlyRate);
                 }
             }
         }
 
-        // Mise à jour du KPI Textuel
-        const finalVal = dataReal[dataReal.length-1];
+        // --- Calcul de la Rente Mensuelle (Nouveau) ---
         const finalNominal = dataNominal[dataNominal.length-1];
+        const monthlyPassiveIncome = (finalNominal * withdrawalRate) / 12;
+        
+        const elPassive = document.getElementById('simPassiveIncome');
+        if(elPassive) elPassive.innerText = monthlyPassiveIncome.toLocaleString('fr-FR', {maximumFractionDigits:0}) + ' €';
+
+        const finalReal = dataReal[dataReal.length-1];
         document.getElementById('finalRealWealth').innerHTML = `
-            ${finalVal.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0})}
+            ${finalReal.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0})}
             <span class="text-xs text-gray-400 block font-normal">Brut: ${finalNominal.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0})}</span>
         `;
 
@@ -355,9 +372,9 @@ window.app = {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Patrimoine Projeté (Brut)',
+                        label: 'Patrimoine Nominal (Brut)',
                         data: dataNominal,
-                        borderColor: '#2563eb', // Bleu Finary
+                        borderColor: '#2563eb',
                         backgroundColor: 'rgba(37, 99, 235, 0.05)',
                         borderWidth: 3,
                         pointRadius: 0,
@@ -366,13 +383,12 @@ window.app = {
                         tension: 0.4
                     },
                     {
-                        label: `Pouvoir d'Achat Réel (Inflation ${document.getElementById('simInflation').value}%)`,
+                        label: `Pouvoir d'Achat (Net Inflation ${document.getElementById('simInflation').value}%)`,
                         data: dataReal,
-                        borderColor: '#9ca3af', // Gris
+                        borderColor: '#9ca3af',
                         borderWidth: 2,
                         borderDash: [4, 4],
                         pointRadius: 0,
-                        pointHoverRadius: 4,
                         fill: false,
                         tension: 0.4
                     }
@@ -385,15 +401,7 @@ window.app = {
                 plugins: {
                     legend: { position: 'top', align: 'end', labels: { boxWidth: 10, usePointStyle: true } },
                     tooltip: {
-                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                        titleColor: '#1e293b',
-                        bodyColor: '#475569',
-                        borderColor: '#e2e8f0',
-                        borderWidth: 1,
-                        padding: 10,
-                        callbacks: {
-                            label: (context) => context.dataset.label + ': ' + Math.round(context.raw).toLocaleString() + ' €'
-                        }
+                        callbacks: { label: (c) => c.dataset.label + ': ' + Math.round(c.raw).toLocaleString() + ' €' }
                     }
                 },
                 scales: {
