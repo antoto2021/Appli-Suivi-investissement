@@ -485,22 +485,59 @@
     </div>
 
     <div id="info-modal-overlay" class="hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-fade-in border-l-8 border-emerald-600 relative">
-            <button onclick="window.infoModule.closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">✕</button>
-            <div class="p-6 md:p-8 space-y-6">
-                <h2 class="text-2xl font-black text-slate-800">ℹ️ Infos & Updates</h2>
-                <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100 grid grid-cols-2 gap-4">
-                    <div class="border-r border-emerald-200 pr-2">
-                        <h3 class="text-[10px] font-bold text-emerald-700 uppercase">Version Locale</h3>
-                        <div class="font-mono text-xs font-bold text-slate-700 mt-1" id="info-local-v">Checking...</div>
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-fade-in relative">
+            <button onclick="window.infoModule.closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition">
+                <i class="fa-solid fa-times text-xl"></i>
+            </button>
+            
+            <div class="p-6 md:p-8 space-y-6 bg-slate-50">
+                <h2 class="text-2xl font-black text-slate-800 flex items-center gap-2">
+                    <div class="bg-blue-600 text-white w-8 h-8 rounded flex items-center justify-center text-sm"><i class="fa-solid fa-info"></i></div>
+                    Informations & Tuto
+                </h2>
+
+                <div class="bg-emerald-50 rounded-xl border border-emerald-100 p-4">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider mb-1">Installée (Locale)</h3>
+                            <div class="font-mono text-sm font-bold text-slate-700" id="info-local-v">Checking...</div>
+                            <div class="text-[10px] text-emerald-600 mt-1" id="info-local-date">Version actuelle</div>
+                        </div>
+                        <div class="text-right">
+                            <h3 class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider mb-1 flex items-center justify-end gap-1">
+                                Disponible (GitHub) <div id="update-indicator" class="hidden w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                            </h3>
+                            <div class="font-mono text-sm font-bold text-emerald-600" id="info-remote-v">Checking...</div>
+                        </div>
                     </div>
-                    <div class="pl-2 text-right">
-                        <h3 class="text-[10px] font-bold text-emerald-700 uppercase">GitHub</h3>
-                        <div class="font-mono text-xs font-bold text-emerald-600 mt-1" id="info-remote-v">Checking...</div>
-                        <button onclick="window.infoModule.checkGitHub()" class="mt-2 text-[10px] bg-emerald-600 text-white px-2 py-1 rounded">Vérifier</button>
+                    
+                    <button onclick="window.infoModule.checkGitHub()" id="btn-check-update" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg transition text-sm flex justify-center items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-rotate"></i> Vérifier maintenant
+                    </button>
+                </div>
+
+                <div>
+                    <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">Zone de Sécurité</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button onclick="window.app.triggerGlobalExport()" class="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-sm transition flex items-center justify-center gap-2 text-sm">
+                            <i class="fa-solid fa-file-export"></i> Sauvegarder (JSON)
+                        </button>
+                        <button onclick="window.app.triggerGlobalImport()" class="bg-slate-700 hover:bg-slate-800 text-white py-3 rounded-lg font-bold shadow-sm transition flex items-center justify-center gap-2 text-sm">
+                            <i class="fa-solid fa-file-import"></i> Restaurer (JSON)
+                        </button>
                     </div>
                 </div>
-                <div class="text-center text-[10px] text-slate-400">© 2026 Suivi-investissement</div>
+
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="text-purple-600 bg-purple-50 p-2 rounded-lg"><i class="fa-solid fa-database"></i></div>
+                        <div>
+                            <h4 class="font-bold text-slate-700 text-sm">État du Stockage Local</h4>
+                            <p class="text-[10px] text-slate-400">Données stockées sécurisées dans IndexedDB.</p>
+                        </div>
+                    </div>
+                    <div class="font-mono font-bold text-slate-800 text-lg" id="storage-usage">...</div>
+                </div>
             </div>
         </div>
     </div>
