@@ -28,7 +28,7 @@ window.app = {
     init: async function() {
         console.log("Démarrage App Bourse...");
         await this.loadData();
-        this.loadDailyTip();
+        if(document.getElementById('dailyTip')) this.loadDailyTip();
         this.setupAutoFill();
         this.renderTable();
         
@@ -924,59 +924,7 @@ renderPie: function() {
                 </div>`;
         });
     },
-
-        sortedAssets.forEach(a => {
-            if(a.qty < 0.001) return;
-            const pru = a.invested / a.qty;
-            const currentPrice = this.currentPrices[a.name] || this.currentPrices[a.ticker] || pru;
-            const totalValue = a.qty * currentPrice;
-            const gain = totalValue - a.invested;
-            const perf = ((gain) / a.invested) * 100;
-            const isPos = gain >= 0;
-            const colorClass = isPos ? 'text-green-600' : 'text-red-500';
-            const borderClass = isPos ? 'border-green-200' : 'border-red-200';
-
-            grid.innerHTML += `
-                <div class="bg-white rounded-xl shadow-sm border ${borderClass} overflow-hidden flex flex-col">
-                    <div class="p-4 border-b border-gray-100 flex justify-between items-start bg-slate-50">
-                        <div class="overflow-hidden">
-                            <h3 class="font-bold text-gray-800 text-lg truncate" title="${a.name}">${a.name}</h3>
-                            <span class="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded">${a.ticker || 'N/A'}</span>
-                        </div>
-                        <div class="text-right">
-                             <div class="text-xs text-gray-400 uppercase font-bold">Qté</div>
-                             <div class="font-mono font-bold text-gray-700">${parseFloat(a.qty).toFixed(4).replace(/\.?0+$/,'')}</div>
-                        </div>
-                    </div>
-                    <div class="p-4 space-y-3">
-                        <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
-                            <div class="text-left">
-                                <span class="block text-[10px] text-gray-400 uppercase">PRU</span>
-                                <span class="font-mono text-sm text-gray-600">${pru.toFixed(2)} €</span>
-                            </div>
-                            <div class="text-right">
-                                <label class="block text-[10px] text-blue-500 uppercase font-bold mb-1"><i class="fa-solid fa-pen-to-square"></i> Prix Actuel</label>
-                                <input type="number" step="0.01" value="${currentPrice.toFixed(2)}" 
-                                    onchange="app.updatePrice('${a.name}', this.value, '${a.ticker}')" 
-                                    class="w-24 text-right font-bold text-gray-800 border-b-2 border-blue-200 focus:border-blue-500 outline-none bg-transparent">
-                            </div>
-                        </div>
-                        <div class="flex justify-between items-end pt-2">
-                            <div>
-                                <span class="text-xs text-gray-400 block">Valeur Totale</span>
-                                <div class="font-bold text-xl text-gray-800">${totalValue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</div>
-                            </div>
-                            <div class="text-right">
-                                <span class="text-xs text-gray-400 block">Perf</span>
-                                <span class="font-bold text-lg ${colorClass}">${isPos ? '+' : ''}${perf.toFixed(2)}%</span>
-                                <div class="text-[10px] ${colorClass} opacity-75">(${isPos ? '+' : ''}${gain.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})})</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-        });
-    },
-
+        
     renderTable: function() {
         // 1. Gestion du Tableau Desktop
         const tbody = document.querySelector('#transactionsTable tbody');
