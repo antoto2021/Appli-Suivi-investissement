@@ -307,10 +307,36 @@ window.app = {
     },
 
     // 3. Fonction principale appelée par les inputs "onchange"
-    updateSimulations: function() {
+        updateSimulations: function() {
+        // On lance d'abord le simulateur de patrimoine
         this.renderWealthSimulator();
         this.renderCompoundInterest();
+
+        // ASTUCE : On recalcule le patrimoine final "Réel" ici pour le passer au graphique de rente
+        // (C'est le même calcul que dans renderWealthSimulator, mais on a besoin de la valeur)
+        const initial = parseFloat(document.getElementById('simInitial')?.value) || 0;
+        const monthly = parseFloat(document.getElementById('simMonthly')?.value) || 0;
+        const yieldPct = parseFloat(document.getElementById('simYield')?.value) / 100 || 0.08;
+        const years = parseInt(document.getElementById('simYears')?.value) || 20;
+        const inflation = parseFloat(document.getElementById('simInflation')?.value) / 100 || 0;
+        
+        let balance = initial;
+        const monthlyRate = yieldPct / 12;
+
+        for(let i = 0; i < years; i++) { // Loop simple sur les années
+             for(let m = 0; m < 12; m++) {
+                balance += monthly;
+                balance *= (1 + monthlyRate);
+            }
+        }
+        
+        // Ajustement inflation pour avoir le "Vrai" capital de départ de la retraite
+        const finalRealWealth = balance / Math.pow(1 + inflation, years);
+
+        // On lance le graphique de décaissement avec cette valeur
+        this.renderDrawdownChart(finalRealWealth);
     },
+
 
     // 4. Graphique 1 : SIMULATEUR PATRIMOINE (Inspiré de Finary Wealth Simulator)
     // Logique : Calcul mensuel précis pour projeter le patrimoine total
@@ -1065,6 +1091,120 @@ window.app = {
                 }
             });
         }
+    },
+    
+        // 6. Graphique 3 : DECUMULATION (Combien de temps dure l'argent ?)
+    renderDrawdownChart: function(finalWealth) {
+        const ctx = document.getElementById('drawdownChart')?.getContext('2d');
+        if(!ctx) return;
+        if(this.charts.drawdown) this.charts.drawdown.destroy();
+
+        // On récupère les paramètres actuels
+        const withdrawalRate = parseFloat(document.getElementById('simWithdrawal')?.value) / 100 || 0.04;
+        const inflation = parseFloat(document.getElementById('simInflation')?.value) / 100 || 0;
+        
+        // HYPOTHÈSE RETRAITE : Une fois à la retraite, on investit plus prudemment.
+        // On fixe arbitrairement le rendement retraite à 5% (ou on prend le yield actuel - 2%)
+        // Ici pour simplifier, disons 5% nominal.
+        const retirementYield = 0.05; 
+
+        // Rente annuelle désirée (basée sur le taux de retrait appliqué au capital final)
+        // C'est la somme qu'on veut retirer chaque année, ajustée de l'inflation future
+        let annualWithdrawal = finalWealth * withdrawalRate;
+
+        // Simulation sur 40 ans de retraite
+        const duration = 40;
+        const labels = [];
+        const dataBalance = [];
+        
+        let currentCapital = finalWealth;
+        let capitalDepletedYear = null;
+
+        for(let i = 1; i <= duration; i++) {
+            labels.push(`Année ${i}`);
+            
+            // 1. Le capital génère des intérêts (prudents)
+            currentCapital *= (1 + retirementYield);
+            
+            // 2. On retire la rente (qui augmente avec l'inflation pour garder le pouvoir d'achat)
+            // Note: Pour simplifier l'affichage "Réel", on peut tout garder en monnaie constante,
+            // mais ici on simule le nominal pour voir la chute.
+            // Approche simplifiée : Capital Réel.
+            // Taux Réel = (1+Nominal)/(1+Inflation) - 1
+            const realYield = ((1 + retirementYield) / (1 + inflation)) - 1;
+            
+            // On refait le calcul en "Réel" pour être cohérent avec le graph 1
+            // Si on est en "Réel", la rente est FIXE (puisque l'inflation est annulée)
+            // Mais le capital ne grandit que du Taux Réel.
+        }
+
+        // --- RE-CALCUL PLUS VISUEL (Approche Cash Flow) ---
+        // On recommence proprement :
+        // On part du Capital Réel Final (pouvoir d'achat).
+        // On retire X% de ce capital chaque année (Rente fixe en pouvoir d'achat).
+        // Le reste du capital grandit au (Taux Nominal 5% - Inflation).
+        
+        const realRetirementYield = ((1 + 0.05) / (1 + inflation)) - 1;
+        const fixedRealWithdrawal = finalWealth * withdrawalRate;
+        
+        currentCapital = finalWealth;
+        dataBalance.length = 0; // Reset
+        labels.length = 0;
+
+        for(let i = 0; i <= duration; i++) {
+            labels.push(`+${i} ans`);
+            dataBalance.push(Math.max(0, currentCapital));
+
+            if (currentCapital <= 0 && capitalDepletedYear === null) {
+                capitalDepletedYear = i;
+            }
+
+            // Calcul année suivante
+            // Solde = (Solde - Retrait) * (1 + Rendement)
+            // On retire l'argent au début de l'année pour vivre
+            currentCapital -= fixedRealWithdrawal;
+            currentCapital *= (1 + realRetirementYield);
+        }
+
+        // Mise à jour du texte indicateur
+        const elLongevity = document.getElementById('capitalLongevity');
+        if (capitalDepletedYear === null) {
+            elLongevity.innerHTML = `<span class="text-green-500">Infinie (Rente Perpétuelle)</span>`;
+        } else {
+            elLongevity.innerHTML = `<span class="text-orange-500">${capitalDepletedYear} ans</span>`;
+        }
+
+        // Couleur des barres : Rouge si épuisé, Bleu sinon
+        const colors = dataBalance.map(v => v > 0 ? '#3b82f6' : '#ef4444');
+
+        this.charts.drawdown = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Capital Restant (Pouvoir d\'achat)',
+                    data: dataBalance,
+                    backgroundColor: colors,
+                    borderRadius: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { display: false, min: 0 },
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (c) => 'Reste : ' + Math.round(c.raw).toLocaleString() + ' €'
+                        }
+                    }
+                }
+            }
+        });
     },
 
     searchTicker: function() { const n = document.getElementById('fName').value; if(n) window.open(`https://www.google.com/search?q=ticker+${encodeURIComponent(n)}`, '_blank'); },
