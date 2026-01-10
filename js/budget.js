@@ -1,6 +1,6 @@
-// js/budget.js - Version Optimisée Performance
+// js/budget.js - Version avec Filtres Mensuels Dynamiques
 
-const { useState, useEffect, useRef, useMemo } = React; // Ajout de useMemo
+const { useState, useEffect, useRef, useMemo } = React;
 
 const DETECTION_KEYWORDS = {
     'Alimentation': ['course', 'super u', 'leclerc', 'auchan', 'lidl', 'carrefour', 'intermarche', 'market', 'franprix', 'monoprix', 'boulangerie', 'ms nanterre'],
@@ -39,14 +39,12 @@ window.BudgetApp = () => {
     const pieRef = useRef(null);
     const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
-    // 1. CHARGEMENT OPTIMISÉ
+    // 1. CHARGEMENT
     useEffect(() => {
         const load = async () => {
             try {
                 await window.dbService.init();
                 const data = await window.dbService.getAll('budget');
-                
-                // Pré-calcul simple pour éviter de le refaire au rendu
                 const safeData = (data || []).map(t => ({
                     ...t,
                     date: t.date || new Date().toISOString().split('T')[0],
@@ -55,10 +53,7 @@ window.BudgetApp = () => {
                     category: t.category || 'Autre',
                     merchant: t.merchant || '' 
                 }));
-
-                // OPTIMISATION TRI : Comparaison de String (beaucoup plus rapide que new Date())
                 safeData.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
-                
                 setTransactions(safeData);
             } catch (e) { console.error("Err Budget Load", e); }
         };
@@ -77,7 +72,6 @@ window.BudgetApp = () => {
         return () => window.removeEventListener('open-income-modal', handleOpenIncome);
     }, []);
 
-    // Catégorisation auto (inchangé)
     useEffect(() => {
         if (!newTx.description) return;
         const text = newTx.description.toLowerCase();
@@ -89,20 +83,16 @@ window.BudgetApp = () => {
         }
     }, [newTx.description]);
 
-    // 2. CALCULS STATISTIQUES MÉMORISÉS (useMemo)
-    // Cela empêche de recalculer tout l'historique à chaque fois qu'on clique sur un bouton
+    // 2. CALCULS STATISTIQUES (useMemo)
     const stats = useMemo(() => {
         const now = new Date();
         const currentM = now.getMonth();
         const currentY = now.getFullYear();
-
-        // On ne parcourt le tableau qu'une seule fois si possible
         const currentTx = [];
         const merchants = {};
         const cats = {};
         const sixM = {};
         
-        // Init 6 derniers mois
         for (let i = 5; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
             const key = `${d.getMonth() + 1}/${d.getFullYear()}`;
@@ -110,10 +100,9 @@ window.BudgetApp = () => {
         }
 
         transactions.forEach(t => {
-            // Lecture date rapide (format YYYY-MM-DD standard)
             const [yStr, mStr] = t.date.split('-'); 
             const tYear = parseInt(yStr);
-            const tMonth = parseInt(mStr) - 1; // 0-indexed
+            const tMonth = parseInt(mStr) - 1;
 
             const isCurrentMonth = tMonth === currentM && tYear === currentY;
             const isExpense = t.amount < 0;
@@ -122,15 +111,11 @@ window.BudgetApp = () => {
 
             if (isExpense) {
                 const absAmount = Math.abs(t.amount);
-                
-                // Top Marchands (Mois en cours)
                 if (isCurrentMonth) {
                     const name = t.merchant || t.description;
                     merchants[name] = (merchants[name] || 0) + absAmount;
                     cats[t.category] = (cats[t.category] || 0) + absAmount;
                 }
-
-                // Graphique 6 mois
                 const k = `${tMonth + 1}/${tYear}`;
                 if (sixM.hasOwnProperty(k)) sixM[k] += absAmount;
             }
@@ -138,14 +123,11 @@ window.BudgetApp = () => {
 
         const top5 = Object.entries(merchants).sort((a, b) => b[1] - a[1]).slice(0, 5);
         return { currentTx, top5, cats, sixM };
+    }, [transactions]);
 
-    }, [transactions]); // Se recalcule uniquement si 'transactions' change
-
-    // 3. GRAPHIQUES (Optimisé pour ne pas bloquer le thread)
+    // 3. GRAPHIQUES
     useEffect(() => {
         if (view !== 'dashboard') return;
-        
-        // Petit délai pour laisser le temps à l'interface de s'afficher avant de dessiner les graphs
         const timer = setTimeout(() => {
             const { cats, sixM } = stats;
             if(window.bPie instanceof Chart) window.bPie.destroy();
@@ -156,7 +138,7 @@ window.BudgetApp = () => {
                 window.bPie = new Chart(ctxPie, {
                     type: 'doughnut',
                     data: { labels: Object.keys(cats), datasets: [{ data: Object.values(cats), backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b', '#10b981'] }] },
-                    options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } } // Animation false pour la vitesse
+                    options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } }
                 });
             }
             if (barRef.current) {
@@ -167,23 +149,50 @@ window.BudgetApp = () => {
                     options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }
                 });
             }
-        }, 50); // 50ms délai
-
+        }, 50);
         return () => clearTimeout(timer);
     }, [stats, view]);
 
-    // 4. LISTE FILTRÉE MÉMORISÉE (useMemo)
-    // Évite de parcourir 1000 transactions à chaque render si on ne change pas de filtre
+    // --- NOUVEAU : Calcul des années disponibles ---
     const availableYears = useMemo(() => {
         try { const years = new Set(transactions.map(t => (t.date ? String(t.date).substring(0,4) : '2024'))); return ['Tout', ...Array.from(years).sort().reverse()]; } catch(e) { return ['Tout']; }
     }, [transactions]);
 
+    // --- NOUVEAU : Calcul des MOIS disponibles pour l'année sélectionnée ---
+    const availableMonthsData = useMemo(() => {
+        const foundIndices = new Set();
+        transactions.forEach(t => {
+            if(!t.date) return;
+            const y = t.date.substring(0,4);
+            const m = parseInt(t.date.substring(5,7)); // 1 à 12
+
+            // Si "Tout" est sélectionné en année, on affiche tous les mois où il y a eu de l'activité
+            // Sinon, on affiche uniquement les mois de l'année sélectionnée
+            if (filterYear === 'Tout' || y === filterYear) {
+                foundIndices.add(m);
+            }
+        });
+        
+        // On trie les mois (1, 2, 3...) et on crée l'objet pour l'affichage
+        return Array.from(foundIndices).sort((a, b) => a - b).map(idx => ({
+            value: idx.toString(),      // ex: "11"
+            label: monthNames[idx - 1]  // ex: "Novembre"
+        }));
+    }, [transactions, filterYear]);
+
+    // --- SÉCURITÉ : Reset du filtre mois si l'année change et que le mois n'existe plus ---
+    useEffect(() => {
+        if(filterMonth !== 'Tout') {
+            const exists = availableMonthsData.find(m => m.value === filterMonth);
+            if(!exists) setFilterMonth('Tout');
+        }
+    }, [filterYear, availableMonthsData]);
+
     const filteredList = useMemo(() => {
         return transactions.filter(t => {
             if(!t.date) return false;
-            // Optimisation: Lecture String directe au lieu de Date object
             const y = t.date.substring(0,4);
-            const m = parseInt(t.date.substring(5,7)).toString(); // "01" -> "1"
+            const m = parseInt(t.date.substring(5,7)).toString();
             
             const yMatch = filterYear === 'Tout' || y === filterYear;
             const mMatch = filterMonth === 'Tout' || m === filterMonth;
@@ -218,16 +227,11 @@ window.BudgetApp = () => {
         window.dispatchEvent(new Event('budget-update'));
     };
 
-    const updateTx = async (id, f, v) => {
-        const tx = transactions.find(t=>t.id===id);
-        if(tx) { const up = {...tx, [f]:v}; await window.dbService.add('budget', up); window.dispatchEvent(new Event('budget-update')); }
-    };
-
     const deleteTx = async (id) => {
         if(confirm("Supprimer ?")) { await window.dbService.delete('budget', id); window.dispatchEvent(new Event('budget-update')); }
     };
 
-    const { top5 } = stats; // On utilise la version mémorisée
+    const { top5 } = stats;
 
     return (
         <div className="flex flex-col h-full bg-slate-50 relative">
@@ -290,10 +294,12 @@ window.BudgetApp = () => {
                             </div>
                             <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
                                 <button onClick={() => setFilterMonth('Tout')} className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterMonth === 'Tout' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border border-gray-100'}`}>Tous</button>
-                                {monthNames.map((m, i) => (
-                                    <button key={i} onClick={() => setFilterMonth((i+1).toString())} 
-                                        className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterMonth === (i+1).toString() ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border border-gray-100'}`}>
-                                        {m}
+                                
+                                {/* C'EST ICI LE CHANGEMENT PRINCIPAL DANS L'AFFICHAGE */}
+                                {availableMonthsData.map((mObj) => (
+                                    <button key={mObj.value} onClick={() => setFilterMonth(mObj.value)} 
+                                        className={`px-3 py-1 text-xs rounded-full font-bold whitespace-nowrap transition ${filterMonth === mObj.value ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white text-gray-500 border border-gray-100'}`}>
+                                        {mObj.label}
                                     </button>
                                 ))}
                             </div>
@@ -303,13 +309,11 @@ window.BudgetApp = () => {
                             <h3 className="text-xs font-bold text-gray-400 uppercase">
                                 {filterMonth !== 'Tout' ? monthNames[parseInt(filterMonth)-1] : ''} {filterYear}
                             </h3>
-                            {/* Limite d'affichage pour éviter le lag si > 500 items */}
                             <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{filteredList.length} ops</span>
                         </div>
 
                         <div className="space-y-2">
                             {filteredList.length === 0 ? (<div className="text-center py-10 bg-white rounded-xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">Aucune donnée.</p></div>) : (
-                                // OPTIMISATION : On limite l'affichage aux 100 premiers éléments pour ne pas tuer le DOM sur mobile
                                 filteredList.slice(0, 100).map(t => (
                                     <div key={t.id} className={`bg-white p-3 rounded-lg border shadow-sm flex flex-col gap-2 relative group transition ${t.amount > 0 ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-red-500 border-gray-100'}`}>
                                         <div className="flex justify-between items-start gap-2">
@@ -339,7 +343,6 @@ window.BudgetApp = () => {
                 )}
             </div>
             
-            {/* ... (La modale reste identique, je ne la répète pas pour gagner de la place, copiez la depuis votre code précédent) ... */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-fade-in">
