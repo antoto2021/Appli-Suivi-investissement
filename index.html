@@ -367,23 +367,57 @@
                 <button onclick="window.app.closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
             </div>
             <form id="txForm" onsubmit="event.preventDefault(); window.app.saveTransaction();" class="space-y-4">
-                <input type="hidden" id="editIndex">
+                <input type="hidden" id="editIndex">            
                 <div class="grid grid-cols-2 gap-4">
-                    <div><label class="form-label">Date</label><input type="date" id="fDate" required class="form-input"></div>
-                    <div><label class="form-label">Opération</label><select id="fOp" class="form-input"><option value="Achat">Achat</option><option value="Vente">Vente</option><option value="Dividende">Dividende</option></select></div>
+                    <div><label class="form-label">Date Début</label><input type="date" id="fDate" required class="form-input"></div>
+                    <div>
+                        <label class="form-label">Opération</label>
+                        <select id="fOp" class="form-input" onchange="window.app.toggleDCAFields()">
+                            <option value="Achat">Achat</option>
+                            <option value="Vente">Vente</option>
+                            <option value="Dividende">Dividende</option>
+                            <option value="DCA">🔄 DCA (Invest. Programmé)</option>
+                        </select>
+                    </div>
                 </div>
+
                 <div class="grid grid-cols-2 gap-4">
                     <div><label class="form-label">Nom Actif</label><input type="text" id="fName" required class="form-input" placeholder="ex: Total"></div>
                     <div><label class="form-label">Ticker</label><div class="flex gap-2"><input type="text" id="fTicker" class="form-input" placeholder="ex: TTE.PA"><button type="button" onclick="window.app.searchTicker()" class="bg-blue-100 text-blue-600 px-3 rounded hover:bg-blue-200"><i class="fa-solid fa-search"></i></button></div></div>
                 </div>
+
                 <div class="grid grid-cols-2 gap-4">
                     <div><label class="form-label">Compte</label><input type="text" id="fAccount" class="form-input"></div>
                     <div><label class="form-label">Secteur</label><input type="text" id="fSector" class="form-input"></div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+
+                <div id="standardFields" class="grid grid-cols-2 gap-4 transition-all">
                     <div><label class="form-label">Quantité</label><input type="number" id="fQty" step="0.0001" class="form-input"></div>
                     <div><label class="form-label">Prix U. (€)</label><input type="number" id="fPrice" step="0.01" class="form-input"></div>
                 </div>
+
+                <div id="dcaFields" class="hidden bg-indigo-50 p-3 rounded-lg border border-indigo-100 space-y-3">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="form-label text-indigo-800">Durée (Mois)</label>
+                            <input type="number" id="fDcaDuration" placeholder="ex: 12" class="form-input border-indigo-200 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="form-label text-indigo-800">Fréquence</label>
+                            <select id="fDcaFreq" class="form-input border-indigo-200 focus:ring-indigo-500">
+                                <option value="1">1 fois / mois</option>
+                                <option value="2">2 fois / mois</option>
+                                <option value="4">Hebdomadaire</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label text-indigo-800">Budget Total du DCA (€)</label>
+                        <input type="number" id="fDcaTotal" step="0.01" placeholder="Somme totale à investir" class="form-input border-indigo-200 focus:ring-indigo-500 font-bold text-indigo-700">
+                        <p class="text-[10px] text-indigo-400 mt-1 italic">* Sera divisé par la durée et la fréquence</p>
+                    </div>
+                </div>
+
                 <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition mt-6">Enregistrer</button>
             </form>
         </div>
