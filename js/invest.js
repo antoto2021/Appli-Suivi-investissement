@@ -184,7 +184,8 @@ window.app = {
         this.transactions.forEach(tx => {
             if(tx.op === 'Dividende') return;
             if(!assets[tx.name]) assets[tx.name] = { 
-                name: tx.name, qty: 0, invested: 0, ticker: tx.ticker||'', account: tx.account || 'Autre' 
+                name: tx.name, qty: 0, invested: 0, ticker: tx.ticker||'', account: tx.account || 'Autre',
+                activeDCA: false // Nouveau champ par défaut
             };
             
             if(tx.op === 'Achat') {
@@ -197,38 +198,33 @@ window.app = {
                 assets[tx.name].qty -= tx.qty;
                 assets[tx.name].invested -= (tx.qty * pru);
             }
-            // --- GESTION DU DCA DANS LE CALCUL PATRIMOINE ---
             else if(tx.op === 'DCA') {
-                // 1. Calculer combien de temps s'est écoulé depuis le début du DCA
                 const startDate = new Date(tx.date);
-                if (startDate > now) return; // Le DCA n'a pas encore commencé
+                if (startDate > now) return; 
 
-                // Différence en mois entre Date Début et Maintenant
                 let monthsPassed = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
-                // On ajoute 1 car le mois en cours compte (si début janv et on est fin janv = 1 mois fait)
                 if (now.getDate() >= startDate.getDate()) monthsPassed += 1;
                 
-                // On ne peut pas dépasser la durée totale prévue
                 const effectiveMonths = Math.min(Math.max(0, monthsPassed), tx.dcaDuration);
                 
+                // Si le DCA est toujours en cours (moins de mois passés que la durée totale)
+                if (effectiveMonths < tx.dcaDuration) {
+                    assets[tx.name].activeDCA = true; // On active le drapeau
+                }
+
                 if (effectiveMonths > 0) {
-                    // Calcul du montant investi À DATE
                     const totalExecutions = tx.dcaDuration * tx.dcaFreq;
                     const amountPerExecution = tx.dcaTotal / totalExecutions;
                     const executionsDone = effectiveMonths * tx.dcaFreq;
-                    
                     const investedSoFar = executionsDone * amountPerExecution;
                     
-                    // Estimation de la Quantité achetée (Basé sur le prix saisi lors du DCA, faute d'historique précis)
-                    // Si pas de prix dans le DCA (souvent le cas), on utilise le prix actuel de l'actif s'il existe déjà
                     let priceRef = tx.price; 
                     if (!priceRef || priceRef === 0) {
                         const existingAsset = assets[tx.name];
                         priceRef = (existingAsset && existingAsset.qty > 0) 
                             ? (this.currentPrices[tx.name] || (existingAsset.invested/existingAsset.qty)) 
-                            : 100; // Fallback arbitraire si inconnu (évite div/0)
+                            : 100; 
                     }
-
                     const estimatedQty = investedSoFar / priceRef;
 
                     assets[tx.name].invested += investedSoFar;
@@ -909,23 +905,18 @@ window.app = {
         const grid = document.getElementById('assetsGrid');
         if(!grid) return;
         
-        // 1. On génère d'abord les boutons de filtres
         this.renderAssetFilters();
-
         grid.innerHTML = '';
         
         const assets = this.getPortfolio();
         let sortedAssets = Object.values(assets).sort((a,b) => b.invested - a.invested);
 
-        // --- FILTRAGE ---
         if (this.assetFilter !== 'Tout') {
             sortedAssets = sortedAssets.filter(a => a.account === this.assetFilter);
         }
 
         if (sortedAssets.length === 0) {
-            grid.innerHTML = `<div class="col-span-full text-center text-gray-400 py-10">
-                Aucun actif trouvé pour "${this.assetFilter}".
-            </div>`;
+            grid.innerHTML = `<div class="col-span-full text-center text-gray-400 py-10">Aucun actif trouvé pour "${this.assetFilter}".</div>`;
             return;
         }
 
@@ -940,18 +931,24 @@ window.app = {
             const colorClass = isPos ? 'text-green-600' : 'text-red-500';
             const borderClass = isPos ? 'border-green-200' : 'border-red-200';
 
+            // Badge DCA (Sablier)
+            const dcaBadge = a.activeDCA 
+                ? `<span class="absolute top-2 right-2 flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-full border border-indigo-200 shadow-sm animate-pulse">
+                     <i class="fa-solid fa-hourglass-half"></i> DCA
+                   </span>` 
+                : '';
+
             grid.innerHTML += `
-                <div class="bg-white rounded-xl shadow-sm border ${borderClass} overflow-hidden flex flex-col">
+                <div class="bg-white rounded-xl shadow-sm border ${borderClass} overflow-hidden flex flex-col relative">
+                    ${dcaBadge}
                     <div class="p-4 border-b border-gray-100 flex justify-between items-start bg-slate-50">
-                        <div class="overflow-hidden">
-                            <h3 class="font-bold text-gray-800 text-lg truncate" title="${a.name}">${a.name}</h3>
+                        <div class="overflow-hidden pr-6"> <h3 class="font-bold text-gray-800 text-lg truncate" title="${a.name}">${a.name}</h3>
                             <div class="flex gap-2 mt-1">
                                 <span class="text-[10px] font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">${a.ticker || 'N/A'}</span>
                                 <span class="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded font-bold">${a.account}</span>
                             </div>
                         </div>
-                        <div class="text-right">
-                             <div class="text-xs text-gray-400 uppercase font-bold">Qté</div>
+                        <div class="text-right pt-4"> <div class="text-xs text-gray-400 uppercase font-bold">Qté</div>
                              <div class="font-mono font-bold text-gray-700">${parseFloat(a.qty).toFixed(4).replace(/\.?0+$/,'')}</div>
                         </div>
                     </div>
