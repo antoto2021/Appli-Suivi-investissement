@@ -327,6 +327,23 @@
                 </div>
                 <div class="chart-container" style="height: 350px;"><canvas id="compoundInterestChart"></canvas></div>
             </div>
+            
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div class="flex justify-between items-end mb-4">
+                     <div>
+                        <h3 class="text-lg font-bold text-gray-800">Longévité du Capital</h3>
+                        <p class="text-xs text-gray-500">Simulation de la phase de consommation (Retraite)</p>
+                     </div>
+                     <div class="text-right">
+                        <p class="text-xs text-gray-400 uppercase">Durée de vie du capital</p>
+                        <p class="text-xl font-black text-blue-600" id="capitalLongevity">Calcul...</p>
+                     </div>
+                </div>
+                <div class="chart-container" style="height: 300px;"><canvas id="drawdownChart"></canvas></div>
+                <p class="text-xs text-gray-400 mt-2 italic text-center">
+                    *Simulation basée sur le maintien du niveau de vie (rente fixe ajustée inflation) avec un rendement post-retraite estimé à 5% (profil plus sécurisé).
+                </p>
+            </div>
         </section>
 
          <section id="dividends-view" class="hidden animate-fade-in">
