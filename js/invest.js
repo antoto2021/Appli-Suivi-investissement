@@ -3,6 +3,7 @@ window.app = {
     currentPrices: {},
     charts: {},
     simData: { monthlySavings: 0, initialized: false },
+    assetFilter: 'Tout', // État pour stocker le filtre actif
     
     tickerDB: {
         'total': 'TTE.PA', 'vinci': 'DG.PA', 'air liquide': 'AI.PA', 'lvmh': 'MC.PA',
@@ -180,11 +181,20 @@ window.app = {
         const assets = {};
         this.transactions.forEach(tx => {
             if(tx.op === 'Dividende') return;
-            if(!assets[tx.name]) assets[tx.name] = { name: tx.name, qty: 0, invested: 0, ticker: tx.ticker||'' };
+            // On initialise l'objet actif s'il n'existe pas
+            if(!assets[tx.name]) assets[tx.name] = { 
+                name: tx.name, 
+                qty: 0, 
+                invested: 0, 
+                ticker: tx.ticker||'',
+                account: tx.account || 'Autre' // On sauvegarde le compte ici
+            };
             
             if(tx.op === 'Achat') {
                 assets[tx.name].qty += tx.qty;
                 assets[tx.name].invested += (tx.qty * tx.price);
+                // Mise à jour du compte au cas où (prend le dernier utilisé)
+                if(tx.account) assets[tx.name].account = tx.account; 
             } else if(tx.op === 'Vente') {
                 const pru = assets[tx.name].invested / (assets[tx.name].qty + tx.qty) || 0;
                 assets[tx.name].qty -= tx.qty;
@@ -244,18 +254,55 @@ window.app = {
         return { invested, currentVal, perf: totalPerf, cagr };
     },
 
-    renderPie: function() {
+renderPie: function() {
         const ctx = document.getElementById('pieChart')?.getContext('2d');
         if(!ctx) return;
         if(this.charts.pie) this.charts.pie.destroy();
         
         const acc = {};
-        this.transactions.filter(t=>t.op==='Achat').forEach(t => acc[t.account] = (acc[t.account]||0) + (t.qty*t.price));
+        // On regroupe les montants par compte
+        this.transactions.filter(t => t.op === 'Achat').forEach(t => {
+            // Si le nom du compte est vide, on met "Autre"
+            const accountName = t.account || 'Autre';
+            acc[accountName] = (acc[accountName] || 0) + (t.qty * t.price);
+        });
         
         this.charts.pie = new Chart(ctx, {
             type: 'doughnut',
-            data: { labels: Object.keys(acc), datasets: [{ data: Object.values(acc), backgroundColor: ['#3b82f6','#8b5cf6','#10b981','#f59e0b'] }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+            data: { 
+                labels: Object.keys(acc), 
+                datasets: [{ 
+                    data: Object.values(acc), 
+                    backgroundColor: [
+                        '#3b82f6', // Blue
+                        '#8b5cf6', // Violet
+                        '#10b981', // Emerald
+                        '#f59e0b', // Amber
+                        '#ef4444', // Red
+                        '#ec4899', // Pink
+                        '#06b6d4', // Cyan
+                        '#84cc16', // Lime
+                        '#f97316', // Orange
+                        '#6366f1', // Indigo
+                        '#14b8a6', // Teal
+                        '#64748b'  // Slate (Gris)
+                    ],
+                    borderWidth: 1
+                }] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    legend: { 
+                        position: 'right',
+                        labels: {
+                            boxWidth: 12,
+                            font: { size: 11 }
+                        }
+                    } 
+                } 
+            }
         });
     },
 
@@ -771,18 +818,112 @@ window.app = {
             }
         });
     },
+
+    renderAssetFilters: function() {
+        const container = document.getElementById('assetFilterContainer');
+        if(!container) return;
+
+        // 1. Récupérer la liste unique des comptes présents dans les transactions
+        const uniqueAccounts = new Set(this.transactions.map(t => t.account || 'Autre').filter(a => a.trim() !== ''));
+        const accounts = ['Tout', ...Array.from(uniqueAccounts).sort()];
+
+        // 2. Générer le HTML des boutons
+        container.innerHTML = accounts.map(acc => {
+            const isActive = this.assetFilter === acc;
+            const style = isActive 
+                ? 'bg-blue-600 text-white shadow-md border-blue-600' 
+                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50';
+            
+            return `<button onclick="window.app.setAssetFilter('${acc}')" 
+                    class="px-4 py-1.5 text-xs font-bold rounded-full transition whitespace-nowrap border ${style}">
+                    ${acc}
+                </button>`;
+        }).join('');
+    },
+
+    setAssetFilter: function(acc) {
+        this.assetFilter = acc;
+        this.renderAssets(); // On relance l'affichage avec le nouveau filtre
+    },
+    
     renderAssets: function() {
         const grid = document.getElementById('assetsGrid');
         if(!grid) return;
+        
+        // 1. On génère d'abord les boutons de filtres
+        this.renderAssetFilters();
+
         grid.innerHTML = '';
         
         const assets = this.getPortfolio();
-        const sortedAssets = Object.values(assets).sort((a,b) => b.invested - a.invested);
+        let sortedAssets = Object.values(assets).sort((a,b) => b.invested - a.invested);
+
+        // --- FILTRAGE ---
+        if (this.assetFilter !== 'Tout') {
+            sortedAssets = sortedAssets.filter(a => a.account === this.assetFilter);
+        }
 
         if (sortedAssets.length === 0) {
-            grid.innerHTML = '<div class="col-span-full text-center text-gray-400 py-10">Aucune position active. Ajoutez des transactions "Achat".</div>';
+            grid.innerHTML = `<div class="col-span-full text-center text-gray-400 py-10">
+                Aucun actif trouvé pour "${this.assetFilter}".
+            </div>`;
             return;
         }
+
+        sortedAssets.forEach(a => {
+            if(a.qty < 0.001) return;
+            const pru = a.invested / a.qty;
+            const currentPrice = this.currentPrices[a.name] || this.currentPrices[a.ticker] || pru;
+            const totalValue = a.qty * currentPrice;
+            const gain = totalValue - a.invested;
+            const perf = ((gain) / a.invested) * 100;
+            const isPos = gain >= 0;
+            const colorClass = isPos ? 'text-green-600' : 'text-red-500';
+            const borderClass = isPos ? 'border-green-200' : 'border-red-200';
+
+            grid.innerHTML += `
+                <div class="bg-white rounded-xl shadow-sm border ${borderClass} overflow-hidden flex flex-col">
+                    <div class="p-4 border-b border-gray-100 flex justify-between items-start bg-slate-50">
+                        <div class="overflow-hidden">
+                            <h3 class="font-bold text-gray-800 text-lg truncate" title="${a.name}">${a.name}</h3>
+                            <div class="flex gap-2 mt-1">
+                                <span class="text-[10px] font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">${a.ticker || 'N/A'}</span>
+                                <span class="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded font-bold">${a.account}</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                             <div class="text-xs text-gray-400 uppercase font-bold">Qté</div>
+                             <div class="font-mono font-bold text-gray-700">${parseFloat(a.qty).toFixed(4).replace(/\.?0+$/,'')}</div>
+                        </div>
+                    </div>
+                    <div class="p-4 space-y-3">
+                        <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
+                            <div class="text-left">
+                                <span class="block text-[10px] text-gray-400 uppercase">PRU</span>
+                                <span class="font-mono text-sm text-gray-600">${pru.toFixed(2)} €</span>
+                            </div>
+                            <div class="text-right">
+                                <label class="block text-[10px] text-blue-500 uppercase font-bold mb-1"><i class="fa-solid fa-pen-to-square"></i> Prix Actuel</label>
+                                <input type="number" step="0.01" value="${currentPrice.toFixed(2)}" 
+                                    onchange="app.updatePrice('${a.name}', this.value, '${a.ticker}')" 
+                                    class="w-24 text-right font-bold text-gray-800 border-b-2 border-blue-200 focus:border-blue-500 outline-none bg-transparent">
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-end pt-2">
+                            <div>
+                                <span class="text-xs text-gray-400 block">Valeur Totale</span>
+                                <div class="font-bold text-xl text-gray-800">${totalValue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</div>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-xs text-gray-400 block">Perf</span>
+                                <span class="font-bold text-lg ${colorClass}">${isPos ? '+' : ''}${perf.toFixed(2)}%</span>
+                                <div class="text-[10px] ${colorClass} opacity-75">(${isPos ? '+' : ''}${gain.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})})</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        });
+    },
 
         sortedAssets.forEach(a => {
             if(a.qty < 0.001) return;
