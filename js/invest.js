@@ -179,31 +179,67 @@ window.app = {
 
     getPortfolio: function() {
         const assets = {};
+        const now = new Date();
+
         this.transactions.forEach(tx => {
             if(tx.op === 'Dividende') return;
-            // On initialise l'objet actif s'il n'existe pas
             if(!assets[tx.name]) assets[tx.name] = { 
-                name: tx.name, 
-                qty: 0, 
-                invested: 0, 
-                ticker: tx.ticker||'',
-                account: tx.account || 'Autre' // On sauvegarde le compte ici
+                name: tx.name, qty: 0, invested: 0, ticker: tx.ticker||'', account: tx.account || 'Autre' 
             };
             
             if(tx.op === 'Achat') {
                 assets[tx.name].qty += tx.qty;
                 assets[tx.name].invested += (tx.qty * tx.price);
-                // Mise à jour du compte au cas où (prend le dernier utilisé)
                 if(tx.account) assets[tx.name].account = tx.account; 
-            } else if(tx.op === 'Vente') {
+            } 
+            else if(tx.op === 'Vente') {
                 const pru = assets[tx.name].invested / (assets[tx.name].qty + tx.qty) || 0;
                 assets[tx.name].qty -= tx.qty;
                 assets[tx.name].invested -= (tx.qty * pru);
             }
+            // --- GESTION DU DCA DANS LE CALCUL PATRIMOINE ---
+            else if(tx.op === 'DCA') {
+                // 1. Calculer combien de temps s'est écoulé depuis le début du DCA
+                const startDate = new Date(tx.date);
+                if (startDate > now) return; // Le DCA n'a pas encore commencé
+
+                // Différence en mois entre Date Début et Maintenant
+                let monthsPassed = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
+                // On ajoute 1 car le mois en cours compte (si début janv et on est fin janv = 1 mois fait)
+                if (now.getDate() >= startDate.getDate()) monthsPassed += 1;
+                
+                // On ne peut pas dépasser la durée totale prévue
+                const effectiveMonths = Math.min(Math.max(0, monthsPassed), tx.dcaDuration);
+                
+                if (effectiveMonths > 0) {
+                    // Calcul du montant investi À DATE
+                    const totalExecutions = tx.dcaDuration * tx.dcaFreq;
+                    const amountPerExecution = tx.dcaTotal / totalExecutions;
+                    const executionsDone = effectiveMonths * tx.dcaFreq;
+                    
+                    const investedSoFar = executionsDone * amountPerExecution;
+                    
+                    // Estimation de la Quantité achetée (Basé sur le prix saisi lors du DCA, faute d'historique précis)
+                    // Si pas de prix dans le DCA (souvent le cas), on utilise le prix actuel de l'actif s'il existe déjà
+                    let priceRef = tx.price; 
+                    if (!priceRef || priceRef === 0) {
+                        const existingAsset = assets[tx.name];
+                        priceRef = (existingAsset && existingAsset.qty > 0) 
+                            ? (this.currentPrices[tx.name] || (existingAsset.invested/existingAsset.qty)) 
+                            : 100; // Fallback arbitraire si inconnu (évite div/0)
+                    }
+
+                    const estimatedQty = investedSoFar / priceRef;
+
+                    assets[tx.name].invested += investedSoFar;
+                    assets[tx.name].qty += estimatedQty;
+                    if(tx.account) assets[tx.name].account = tx.account;
+                }
+            }
         });
         return assets;
     },
-
+    
     calcKPIs: function() {
         const assets = this.getPortfolio();
         let invested = 0, currentVal = 0;
@@ -254,7 +290,7 @@ window.app = {
         return { invested, currentVal, perf: totalPerf, cagr };
     },
 
-renderPie: function() {
+    renderPie: function() {
         const ctx = document.getElementById('pieChart')?.getContext('2d');
         if(!ctx) return;
         if(this.charts.pie) this.charts.pie.destroy();
@@ -773,14 +809,12 @@ renderPie: function() {
         if(this.charts.sec) this.charts.sec.destroy();
 
         const sectors = {};
-        // On pondère par la valorisation actuelle (Qté * Prix Actuel) pour voir l'exposition réelle
-        // Ou par le montant investi si on préfère. Ici on prend la valeur actuelle (plus logique pour une alloc).
         const pf = this.getPortfolio();
+        let totalVal = 0;
         
+        // 1. Calcul des montants par secteur
         Object.values(pf).forEach(asset => {
             if(asset.qty < 0.001) return;
-            // On retrouve la transaction d'origine ou on cherche le secteur autrement
-            // Simplification : on cherche le secteur dans la dernière transaction associée à ce ticker
             const lastTx = this.transactions.find(t => t.ticker === asset.ticker || t.name === asset.name);
             const s = lastTx?.sector || 'Autre';
             
@@ -788,22 +822,38 @@ renderPie: function() {
             const val = asset.qty * price;
             
             sectors[s] = (sectors[s] || 0) + val;
+            totalVal += val;
         });
 
+        // 2. Conversion en Pourcentages
+        const sectorLabels = Object.keys(sectors);
+        const sectorPercentages = Object.values(sectors).map(v => ((v / totalVal) * 100).toFixed(1));
+
         this.charts.sec = new Chart(ctx, {
-            type: 'polarArea',
+            type: 'pie', // On passe en "Camembert" classique (plus lisible que PolarArea)
             data: { 
-                labels: Object.keys(sectors), 
+                labels: sectorLabels, 
                 datasets: [{ 
-                    data: Object.values(sectors), 
+                    data: sectorPercentages, // On affiche directement les %
                     backgroundColor: [
-                        'rgba(59, 130, 246, 0.7)',  // Blue
-                        'rgba(16, 185, 129, 0.7)',  // Green
-                        'rgba(245, 158, 11, 0.7)',  // Amber
-                        'rgba(239, 68, 68, 0.7)',   // Red
-                        'rgba(139, 92, 246, 0.7)',  // Purple
-                        'rgba(236, 72, 153, 0.7)',  // Pink
-                        'rgba(99, 102, 241, 0.7)',  // Indigo
+                        '#3b82f6', // Blue
+                        '#10b981', // Emerald
+                        '#f59e0b', // Amber
+                        '#ef4444', // Red
+                        '#8b5cf6', // Violet
+                        '#ec4899', // Pink
+                        '#06b6d4', // Cyan
+                        '#84cc16', // Lime
+                        '#f97316', // Orange
+                        '#6366f1', // Indigo
+                        '#14b8a6', // Teal
+                        '#64748b', // Slate
+                        '#d946ef', // Fuchsia
+                        '#f43f5e', // Rose
+                        '#0ea5e9', // Sky
+                        '#22c55e', // Green
+                        '#eab308', // Yellow
+                        '#a855f7'  // Purple
                     ],
                     borderWidth: 1
                 }] 
@@ -812,13 +862,22 @@ renderPie: function() {
                 responsive: true, 
                 maintainAspectRatio: false,
                 plugins: { 
-                    legend: { position: 'right', labels: { boxWidth: 10, font: {size: 10} } } 
-                },
-                scales: { r: { ticks: { display: false }, grid: { color: '#f3f4f6' } } }
+                    legend: { 
+                        position: 'right', 
+                        labels: { boxWidth: 12, font: {size: 11} } 
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return ' ' + context.label + ': ' + context.raw + ' %';
+                            }
+                        }
+                    }
+                }
             }
         });
     },
-
+    
     renderAssetFilters: function() {
         const container = document.getElementById('assetFilterContainer');
         if(!container) return;
@@ -926,51 +985,74 @@ renderPie: function() {
     },
         
     renderTable: function() {
-        // 1. Gestion du Tableau Desktop
         const tbody = document.querySelector('#transactionsTable tbody');
-        // 2. Gestion de la Liste Mobile
         const mobileList = document.getElementById('transactionsMobileList');
-        
         if(!tbody || !mobileList) return;
         
         tbody.innerHTML = '';
-        mobileList.innerHTML = ''; // On vide aussi la vue mobile
+        mobileList.innerHTML = ''; 
         
         const sorted = [...this.transactions].sort((a,b)=>new Date(b.date)-new Date(a.date));
         
-        if(sorted.length === 0) {
-            document.getElementById('emptyState')?.classList.remove('hidden');
-        } else {
-            document.getElementById('emptyState')?.classList.add('hidden');
-        }
+        if(sorted.length === 0) document.getElementById('emptyState')?.classList.remove('hidden');
+        else document.getElementById('emptyState')?.classList.add('hidden');
 
         sorted.forEach(tx => {
-            const total = tx.op==='Dividende' ? tx.price : (tx.qty*tx.price);
-            
-            // Couleurs des badges
+            let total = tx.op==='Dividende' ? tx.price : (tx.qty*tx.price);
             let badgeColor = 'bg-gray-100 text-gray-800';
             let icon = 'fa-arrow-right';
-            if(tx.op === 'Achat') { badgeColor = 'bg-blue-100 text-blue-800'; icon = 'fa-arrow-down'; }
-            if(tx.op === 'Vente') { badgeColor = 'bg-emerald-100 text-emerald-800'; icon = 'fa-arrow-up'; } // Vente = Encaissement (Vert)
-            if(tx.op === 'Dividende') { badgeColor = 'bg-yellow-100 text-yellow-800'; icon = 'fa-coins'; }
+            let details = tx.qty + ' x ' + tx.price;
+            let statusHTML = '';
 
-            // --- VUE DESKTOP (Tableau) ---
+            // --- LOGIQUE DCA ---
+            if(tx.op === 'DCA') {
+                badgeColor = 'bg-indigo-100 text-indigo-800';
+                icon = 'fa-rotate';
+                total = tx.dcaTotal || 0;
+                details = `${tx.dcaDuration} mois • ${tx.dcaFreq}/mois`;
+
+                // Calcul Sablier (Temps restant)
+                const startDate = new Date(tx.date);
+                const endDate = new Date(startDate);
+                endDate.setMonth(startDate.getMonth() + (tx.dcaDuration || 0));
+                
+                const now = new Date();
+                const diffTime = endDate - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays > 0) {
+                    const monthsLeft = Math.floor(diffDays / 30);
+                    const label = monthsLeft > 0 ? `${monthsLeft} mois` : `${diffDays} jours`;
+                    statusHTML = `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full border border-indigo-100"><i class="fa-solid fa-hourglass-half"></i> Reste ${label}</span>`;
+                } else {
+                    statusHTML = `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100"><i class="fa-solid fa-check"></i> Terminé</span>`;
+                }
+            } else if(tx.op === 'Achat') { 
+                badgeColor = 'bg-blue-100 text-blue-800'; icon = 'fa-arrow-down'; 
+            } else if(tx.op === 'Vente') { 
+                badgeColor = 'bg-emerald-100 text-emerald-800'; icon = 'fa-arrow-up'; 
+            } else if(tx.op === 'Dividende') { 
+                badgeColor = 'bg-yellow-100 text-yellow-800'; icon = 'fa-coins'; details = 'Revenu';
+            }
+
+            // Affichage Desktop
             tbody.innerHTML += `
                 <tr class="bg-white border-b hover:bg-gray-50 transition">
                     <td class="px-4 py-3 font-mono text-xs whitespace-nowrap">${tx.date}</td>
                     <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs ${badgeColor}">${tx.op}</span></td>
-                    <td class="px-4 py-3 font-bold text-gray-700">${tx.name}</td>
+                    <td class="px-4 py-3 font-bold text-gray-700">${tx.name} <div class="md:hidden">${statusHTML}</div></td>
                     <td class="px-4 py-3 text-xs text-gray-500">${tx.account||'-'}</td>
-                    <td class="px-4 py-3 text-right font-mono">${tx.op==='Dividende'?'-':tx.qty}</td>
-                    <td class="px-4 py-3 text-right font-mono text-xs text-gray-400">${tx.price.toFixed(2)}</td>
+                    <td class="px-4 py-3 text-right font-mono">${tx.op==='DCA' ? '<i class="fa-solid fa-infinity text-xs text-gray-400"></i>' : (tx.op==='Dividende'?'-':tx.qty)}</td>
+                    <td class="px-4 py-3 text-right font-mono text-xs text-gray-400">${tx.price > 0 ? tx.price.toFixed(2) : '-'}</td>
                     <td class="px-4 py-3 text-right font-bold text-gray-800">${total.toFixed(2)} €</td>
                     <td class="px-4 py-3 text-center whitespace-nowrap">
+                        <div class="hidden md:block mb-1">${statusHTML}</div>
                         <button onclick="window.app.openModal('edit', ${tx.id})" class="text-blue-500 hover:text-blue-700 mx-1 p-1"><i class="fa-solid fa-pen"></i></button>
                         <button onclick="window.app.deleteTx(${tx.id})" class="text-red-400 hover:text-red-600 mx-1 p-1"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 </tr>`;
 
-            // --- VUE MOBILE (Cartes) ---
+            // Affichage Mobile
             mobileList.innerHTML += `
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-2 relative">
                     <div class="flex justify-between items-start">
@@ -985,10 +1067,10 @@ renderPie: function() {
                         </div>
                         <div class="text-right flex-shrink-0 ml-2">
                             <div class="font-bold text-gray-800 text-sm">${total.toFixed(2)} €</div>
-                            <div class="text-[10px] text-gray-400">${tx.op === 'Dividende' ? 'Revenu' : tx.qty + ' x ' + tx.price}</div>
+                            <div class="text-[10px] text-gray-400">${details}</div>
                         </div>
                     </div>
-                    
+                    ${tx.op === 'DCA' ? `<div class="mt-1 flex justify-end">${statusHTML}</div>` : ''}
                     <div class="flex justify-end gap-3 mt-2 border-t pt-2 border-gray-50">
                         <button onclick="window.app.openModal('edit', ${tx.id})" class="text-xs font-bold text-blue-600 flex items-center gap-1"><i class="fa-solid fa-pen"></i> Modifier</button>
                         <button onclick="window.app.deleteTx(${tx.id})" class="text-xs font-bold text-red-500 flex items-center gap-1"><i class="fa-solid fa-trash"></i> Suppr.</button>
@@ -996,7 +1078,7 @@ renderPie: function() {
                 </div>`;
         });
     },
-
+    
     renderDividends: function() {
         const container = document.getElementById('dividendCards');
         if(!container) return;
@@ -1030,10 +1112,15 @@ renderPie: function() {
         document.getElementById('editIndex').value = id !== null ? id : '';
         document.getElementById('modalTitle').textContent = mode==='new' ? 'Nouvelle Transaction' : 'Modifier Transaction';
         
+        // Reset fields logic
+        document.getElementById('standardFields').classList.remove('hidden');
+        document.getElementById('dcaFields').classList.add('hidden');
+
         if(mode==='new') {
             document.getElementById('fDate').value = new Date().toISOString().split('T')[0];
-            ['fName','fTicker','fAccount','fSector','fQty','fPrice'].forEach(id => document.getElementById(id).value = '');
+            ['fName','fTicker','fAccount','fSector','fQty','fPrice','fDcaDuration','fDcaTotal'].forEach(id => document.getElementById(id).value = '');
             document.getElementById('fOp').value = 'Achat';
+            document.getElementById('fDcaFreq').value = '1';
         } else {
             const tx = this.transactions.find(t => t.id == id);
             if(tx) {
@@ -1043,32 +1130,49 @@ renderPie: function() {
                 document.getElementById('fTicker').value = tx.ticker||'';
                 document.getElementById('fAccount').value = tx.account||'';
                 document.getElementById('fSector').value = tx.sector||'';
-                document.getElementById('fQty').value = tx.qty;
-                document.getElementById('fPrice').value = tx.price;
+                
+                // Gestion affichage si c'est un DCA existant
+                if (tx.op === 'DCA') {
+                    this.toggleDCAFields();
+                    document.getElementById('fDcaDuration').value = tx.dcaDuration || '';
+                    document.getElementById('fDcaFreq').value = tx.dcaFreq || '1';
+                    document.getElementById('fDcaTotal').value = tx.dcaTotal || '';
+                } else {
+                    document.getElementById('fQty').value = tx.qty;
+                    document.getElementById('fPrice').value = tx.price;
+                }
             }
         }
     },
+    
     closeModal: function() { document.getElementById('modalForm').classList.add('hidden'); },
     
     saveTransaction: async function() {
         const idVal = document.getElementById('editIndex').value;
+        const op = document.getElementById('fOp').value;
+        
         const tx = {
             id: idVal ? parseFloat(idVal) : null,
             date: document.getElementById('fDate').value,
-            op: document.getElementById('fOp').value,
+            op: op,
             name: document.getElementById('fName').value,
             ticker: document.getElementById('fTicker').value,
             account: document.getElementById('fAccount').value,
             sector: document.getElementById('fSector').value,
             qty: parseFloat(document.getElementById('fQty').value)||0,
-            price: parseFloat(document.getElementById('fPrice').value)||0
+            price: parseFloat(document.getElementById('fPrice').value)||0,
+            // Nouveaux champs DCA
+            dcaDuration: op === 'DCA' ? parseFloat(document.getElementById('fDcaDuration').value) : null,
+            dcaFreq: op === 'DCA' ? parseFloat(document.getElementById('fDcaFreq').value) : null,
+            dcaTotal: op === 'DCA' ? parseFloat(document.getElementById('fDcaTotal').value) : null
         };
+        
         await this.addTransaction(tx);
         this.closeModal(); 
         this.toast("Sauvegardé"); 
         this.renderTable();
     },
-
+    
     handleImport: async function(e) {
         const r = new FileReader();
         r.onload = async ev => {
@@ -1182,7 +1286,7 @@ renderPie: function() {
         }
     },
     
-        // 6. Graphique 3 : DECUMULATION (Combien de temps dure l'argent ?)
+    // 6. Graphique 3 : DECUMULATION (Combien de temps dure l'argent ?)
     renderDrawdownChart: function(finalWealth) {
         const ctx = document.getElementById('drawdownChart')?.getContext('2d');
         if(!ctx) return;
@@ -1294,6 +1398,24 @@ renderPie: function() {
                 }
             }
         });
+    },
+
+    toggleDCAFields: function() {
+        const op = document.getElementById('fOp').value;
+        const isDCA = op === 'DCA';
+        const std = document.getElementById('standardFields');
+        const dca = document.getElementById('dcaFields');
+        
+        if (isDCA) {
+            std.classList.add('hidden');
+            dca.classList.remove('hidden');
+            // On force les champs classiques à 0 pour ne pas perturber les calculs si on repasse en DCA
+            document.getElementById('fQty').value = 0;
+            document.getElementById('fPrice').value = 0;
+        } else {
+            std.classList.remove('hidden');
+            dca.classList.add('hidden');
+        }
     },
 
     searchTicker: function() { const n = document.getElementById('fName').value; if(n) window.open(`https://www.google.com/search?q=ticker+${encodeURIComponent(n)}`, '_blank'); },
