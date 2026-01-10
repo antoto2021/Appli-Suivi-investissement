@@ -181,12 +181,14 @@
         </section>
 
         <section id="assets-view" class="hidden animate-fade-in">
-             <div class="flex items-center justify-between mb-6">
+             <div class="flex items-center justify-between mb-4">
                 <div class="breadcrumb">
                     <span onclick="window.app.nav('home')">Accueil</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span onclick="window.app.nav('dashboard')">Investissements</span> <i class="fa-solid fa-chevron-right text-xs"></i> <span class="active">Actifs</span>
                 </div>
                 <button onclick="window.app.nav('dashboard')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">Retour Dash</button>
             </div>
+            <div class="flex gap-2 overflow-x-auto pb-2 mb-4 no-scrollbar" id="assetFilterContainer">
+                </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="assetsGrid"></div>
         </section>
 
