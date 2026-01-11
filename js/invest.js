@@ -931,32 +931,39 @@ window.app = {
             const colorClass = isPos ? 'text-green-600' : 'text-red-500';
             const borderClass = isPos ? 'border-green-200' : 'border-red-200';
 
-            // Badge DCA (Sablier)
+            // Badge DCA
             const dcaBadge = a.activeDCA 
-                ? `<span class="absolute top-2 right-2 flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-full border border-indigo-200 shadow-sm animate-pulse">
+                ? `<span class="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-1 rounded-full border border-indigo-200 shadow-sm animate-pulse ml-2">
                      <i class="fa-solid fa-hourglass-half"></i> DCA
                    </span>` 
                 : '';
 
             grid.innerHTML += `
-                <div class="bg-white rounded-xl shadow-sm border ${borderClass} overflow-hidden flex flex-col relative group">
-                    ${dcaBadge}
-                    <div class="p-4 border-b border-gray-100 flex justify-between items-start bg-slate-50 relative">
-                        <div class="overflow-hidden pr-6">
-                            <h3 class="font-bold text-gray-800 text-lg truncate" title="${a.name}">${a.name}</h3>
+                <div class="bg-white rounded-xl shadow-sm border ${borderClass} overflow-hidden flex flex-col relative group animate-fade-in">
+                    
+                    <div class="p-4 border-b border-gray-100 flex justify-between items-start bg-slate-50">
+                        
+                        <div class="overflow-hidden flex-1">
+                            <div class="flex items-center">
+                                <h3 class="font-bold text-gray-800 text-lg truncate" title="${a.name}">${a.name}</h3>
+                                ${dcaBadge}
+                            </div>
                             <div class="flex gap-2 mt-1">
                                 <span class="text-[10px] font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">${a.ticker || 'N/A'}</span>
                                 <span class="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded font-bold">${a.account}</span>
                             </div>
                         </div>
-                        <div class="text-right pt-4">
-                             <div class="text-xs text-gray-400 uppercase font-bold">Qté</div>
-                             <div class="font-mono font-bold text-gray-700">${parseFloat(a.qty).toFixed(4).replace(/\.?0+$/,'')}</div>
-                        </div>
 
-                        <button onclick="window.simulator.open('${a.name}')" class="absolute bottom-2 right-2 bg-white text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-200 w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition md:opacity-0 md:group-hover:opacity-100" title="Simuler un achat">
-                            <i class="fa-solid fa-calculator text-xs"></i>
-                        </button>
+                        <div class="text-right flex flex-col items-end gap-2 pl-2">
+                             <button onclick="window.simulator.open('${a.name}')" class="bg-white text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-200 w-8 h-8 rounded-lg flex items-center justify-center shadow-sm transition md:opacity-0 md:group-hover:opacity-100" title="Simuler un achat">
+                                <i class="fa-solid fa-calculator text-sm"></i>
+                            </button>
+
+                            <div>
+                                 <div class="text-xs text-gray-400 uppercase font-bold">Qté</div>
+                                 <div class="font-mono font-bold text-gray-700">${parseFloat(a.qty).toFixed(4).replace(/\.?0+$/,'')}</div>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="p-4 space-y-3">
@@ -969,7 +976,7 @@ window.app = {
                                 <label class="block text-[10px] text-blue-500 uppercase font-bold mb-1"><i class="fa-solid fa-pen-to-square"></i> Prix Actuel</label>
                                 <input type="number" step="0.01" value="${currentPrice.toFixed(2)}" 
                                     onchange="app.updatePrice('${a.name}', this.value, '${a.ticker}')" 
-                                    class="w-24 text-right font-bold text-gray-800 border-b-2 border-blue-200 focus:border-blue-500 outline-none bg-transparent">
+                                    class="w-20 text-right font-bold text-gray-800 border-b-2 border-blue-200 focus:border-blue-500 outline-none bg-transparent">
                             </div>
                         </div>
                         <div class="flex justify-between items-end pt-2">
