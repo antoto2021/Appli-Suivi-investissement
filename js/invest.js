@@ -939,19 +939,26 @@ window.app = {
                 : '';
 
             grid.innerHTML += `
-                <div class="bg-white rounded-xl shadow-sm border ${borderClass} overflow-hidden flex flex-col relative">
+                <div class="bg-white rounded-xl shadow-sm border ${borderClass} overflow-hidden flex flex-col relative group">
                     ${dcaBadge}
-                    <div class="p-4 border-b border-gray-100 flex justify-between items-start bg-slate-50">
-                        <div class="overflow-hidden pr-6"> <h3 class="font-bold text-gray-800 text-lg truncate" title="${a.name}">${a.name}</h3>
+                    <div class="p-4 border-b border-gray-100 flex justify-between items-start bg-slate-50 relative">
+                        <div class="overflow-hidden pr-6">
+                            <h3 class="font-bold text-gray-800 text-lg truncate" title="${a.name}">${a.name}</h3>
                             <div class="flex gap-2 mt-1">
                                 <span class="text-[10px] font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">${a.ticker || 'N/A'}</span>
                                 <span class="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded font-bold">${a.account}</span>
                             </div>
                         </div>
-                        <div class="text-right pt-4"> <div class="text-xs text-gray-400 uppercase font-bold">Qté</div>
+                        <div class="text-right pt-4">
+                             <div class="text-xs text-gray-400 uppercase font-bold">Qté</div>
                              <div class="font-mono font-bold text-gray-700">${parseFloat(a.qty).toFixed(4).replace(/\.?0+$/,'')}</div>
                         </div>
+
+                        <button onclick="window.simulator.open('${a.name}')" class="absolute bottom-2 right-2 bg-white text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-200 w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition md:opacity-0 md:group-hover:opacity-100" title="Simuler un achat">
+                            <i class="fa-solid fa-calculator text-xs"></i>
+                        </button>
                     </div>
+                    
                     <div class="p-4 space-y-3">
                         <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
                             <div class="text-left">
