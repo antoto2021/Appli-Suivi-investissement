@@ -68,52 +68,113 @@ window.simulator = {
         let newInvested = curInvested;
         let finalPRU = curPRU;
         
-        const projectionData = []; // Pour le graphique
+        const projectionData = []; 
 
         if (mode === 'unique') {
-            // SCÉNARIO 1 : ACHAT UNIQUE
+            // Achat Unique
             const qtyBought = amount / marketPrice;
             newInvested += amount;
             newQty += qtyBought;
             finalPRU = newInvested / newQty;
 
-            // Données graphiques simples (Avant / Après)
             projectionData.push({ x: 'Actuel', y: curPRU });
             projectionData.push({ x: 'Projeté', y: finalPRU });
 
         } else {
-            // SCÉNARIO 2 : DCA (Projection temporelle)
-            const duration = parseInt(document.getElementById('sim-duration').value) || 12; // Mois
-            // Hypothèse : Le prix évolue linéairement selon le trend choisi (ex: +5% par an)
-            const annualTrend = parseFloat(document.getElementById('sim-trend').value) / 100; // 0.05
+            // DCA
+            const duration = parseInt(document.getElementById('sim-duration').value) || 12; 
+            const annualTrend = parseFloat(document.getElementById('sim-trend').value) / 100; 
             const monthlyTrend = annualTrend / 12;
 
             let simPrice = marketPrice;
-            
-            // Point de départ
             projectionData.push({ x: 'Mois 0', pr: curPRU, val: curInvested });
 
             for(let i = 1; i <= duration; i++) {
-                // Le prix du marché évolue
                 simPrice = simPrice * (1 + monthlyTrend);
-                
-                // On achète
                 const qtyBought = amount / simPrice;
                 newInvested += amount;
                 newQty += qtyBought;
-                
-                // Le PRU évolue
                 const stepPRU = newInvested / newQty;
                 
                 projectionData.push({ 
                     x: `Mois ${i}`, 
                     pru: stepPRU, 
                     price: simPrice,
-                    val: newQty * simPrice // Valeur totale portefeuille
+                    val: newQty * simPrice 
                 });
             }
             finalPRU = newInvested / newQty;
         }
+
+        // --- MISE À JOUR UI RÉSULTATS ---
+        
+        // 1. PRU (Avec écart)
+        const pruEl = document.getElementById('res-new-pru');
+        const pruDiffEl = document.getElementById('res-pru-diff');
+        pruEl.innerText = finalPRU.toFixed(2) + ' €';
+        
+        if(finalPRU < curPRU) {
+            pruEl.className = "text-base md:text-lg font-black text-emerald-600";
+            pruDiffEl.innerHTML = `<i class="fa-solid fa-arrow-down"></i> -${(curPRU - finalPRU).toFixed(2)}€`;
+            pruDiffEl.className = "mt-1 inline-block text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded";
+        } else if (finalPRU > curPRU) {
+            pruEl.className = "text-base md:text-lg font-black text-orange-500";
+            pruDiffEl.innerHTML = `<i class="fa-solid fa-arrow-up"></i> +${(finalPRU - curPRU).toFixed(2)}€`;
+            pruDiffEl.className = "mt-1 inline-block text-[9px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded";
+        } else {
+            pruEl.className = "text-base md:text-lg font-black text-slate-800";
+            pruDiffEl.innerHTML = "Inchangé";
+            pruDiffEl.className = "mt-1 inline-block text-[9px] text-slate-400";
+        }
+
+        // 2. QUANTITÉ (Avec gain d'actifs)
+        document.getElementById('res-qty').innerText = newQty.toFixed(4);
+        
+        const gainedQty = newQty - curQty;
+        const qtyDiffEl = document.getElementById('res-qty-diff');
+        if(gainedQty > 0) {
+            qtyDiffEl.innerHTML = `<i class="fa-solid fa-plus"></i> ${gainedQty.toFixed(4)}`;
+            qtyDiffEl.className = "mt-1 inline-block text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded";
+        } else {
+            qtyDiffEl.innerHTML = "-";
+            qtyDiffEl.className = "mt-1 inline-block text-[9px] text-slate-300";
+        }
+
+        // 3. POIDS (Avec augmentation %)
+        const kpis = window.app.calcKPIs(); 
+        const totalPortfolioNow = kpis.currentVal;
+        
+        // Poids Actuel (Basé sur le prix simulé pour comparer ce qui est comparable)
+        const currentValAsset = curQty * marketPrice;
+        const currentWeight = totalPortfolioNow > 0 ? (currentValAsset / totalPortfolioNow) * 100 : 0;
+
+        // Poids Futur
+        const addedValue = (newInvested - curInvested); 
+        const totalPortfolioFuture = totalPortfolioNow + addedValue; 
+        const futureValAsset = newQty * marketPrice; 
+        const futureWeight = totalPortfolioFuture > 0 ? (futureValAsset / totalPortfolioFuture) * 100 : 0;
+        
+        const weightDiff = futureWeight - currentWeight;
+
+        const weightEl = document.getElementById('res-weight');
+        weightEl.innerText = futureWeight.toFixed(1) + ' %';
+        
+        // Alerte Poids > 15% (Rouge) sinon Violet
+        if(futureWeight > 15) weightEl.className = "text-base md:text-lg font-bold text-red-600";
+        else weightEl.className = "text-base md:text-lg font-bold text-purple-600";
+
+        const weightDiffEl = document.getElementById('res-weight-diff');
+        if(weightDiff > 0.01) {
+            weightDiffEl.innerHTML = `<i class="fa-solid fa-arrow-up"></i> +${weightDiff.toFixed(1)}%`;
+            weightDiffEl.className = "mt-1 inline-block text-[9px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded";
+        } else {
+            weightDiffEl.innerHTML = "-";
+            weightDiffEl.className = "mt-1 inline-block text-[9px] text-slate-300";
+        }
+
+        // 4. Graphiques
+        this.renderCharts(mode, curPRU, finalPRU, marketPrice, projectionData);
+    },
 
         // 3. Mise à jour UI Résultats
         
