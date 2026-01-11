@@ -176,44 +176,6 @@ window.simulator = {
         this.renderCharts(mode, curPRU, finalPRU, marketPrice, projectionData);
     },
 
-        // 3. Mise à jour UI Résultats
-        
-        // A. PRU
-        const pruEl = document.getElementById('res-new-pru');
-        pruEl.innerText = finalPRU.toFixed(2) + ' €';
-        // Couleur : Vert si on baisse le PRU, Rouge si on l'augmente
-        if(finalPRU < curPRU) {
-            pruEl.className = "text-2xl font-black text-emerald-600";
-            document.getElementById('res-pru-diff').innerHTML = `<i class="fa-solid fa-arrow-down"></i> -${(curPRU - finalPRU).toFixed(2)}€`;
-            document.getElementById('res-pru-diff').className = "text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded";
-        } else {
-            pruEl.className = "text-2xl font-black text-orange-500";
-            document.getElementById('res-pru-diff').innerHTML = `<i class="fa-solid fa-arrow-up"></i> +${(finalPRU - curPRU).toFixed(2)}€`;
-            document.getElementById('res-pru-diff').className = "text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded";
-        }
-
-        // B. Poids dans le portefeuille
-        // On doit recalculer le total global du portefeuille
-        const kpis = window.app.calcKPIs(); 
-        const totalPortfolioNow = kpis.currentVal;
-        const addedValue = (newInvested - curInvested); // Cash ajouté
-        const totalPortfolioFuture = totalPortfolioNow + addedValue; // Approx (on ajoute le cash investi au total)
-
-        const futureValAsset = newQty * marketPrice; // Valeur future de la ligne
-        const futureWeight = (futureValAsset / totalPortfolioFuture) * 100;
-        
-        document.getElementById('res-weight').innerText = futureWeight.toFixed(1) + ' %';
-        // Alerte si > 15% (exemple)
-        if(futureWeight > 15) document.getElementById('res-weight').classList.add('text-red-600');
-        else document.getElementById('res-weight').classList.remove('text-red-600');
-
-        // C. Parts
-        document.getElementById('res-qty').innerText = newQty.toFixed(4);
-
-        // 4. Graphiques
-        this.renderCharts(mode, curPRU, finalPRU, marketPrice, projectionData);
-    },
-
     renderCharts: function(mode, oldPRU, newPRU, marketPrice, data) {
         const ctx = document.getElementById('simChart').getContext('2d');
         if(this.charts.main) this.charts.main.destroy();
