@@ -546,26 +546,29 @@
     </div>
 
     <div id="simulator-modal" class="hidden fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col md:flex-row h-auto md:h-[85vh] max-h-[90vh] overflow-y-auto md:overflow-hidden animate-fade-in">
+        <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col md:flex-row h-auto max-h-[90vh] overflow-y-auto animate-fade-in relative">
             
-            <div class="w-full md:w-1/3 bg-slate-50 p-6 border-r border-slate-200 overflow-y-auto">
+            <button onclick="window.simulator.close()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 z-50 bg-white/80 rounded-full p-1 transition">
+                <i class="fa-solid fa-times text-xl"></i>
+            </button>
+
+            <div class="w-full md:w-1/3 bg-slate-50 p-6 border-r border-slate-200">
                 <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-calculator text-blue-600"></i> Simuler</h3>
-                    <button onclick="window.simulator.close()" class="text-slate-400 hover:text-slate-600 md:hidden"><i class="fa-solid fa-times"></i></button>
+                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-calculator text-blue-600"></i> Simuler</h3>
                 </div>
 
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6">
-                    <h4 class="text-xs font-bold text-slate-400 uppercase mb-2">Actif sélectionné</h4>
+                    <h4 class="text-[10px] font-bold text-slate-400 uppercase mb-2">Actif sélectionné</h4>
                     <div class="flex justify-between items-center">
-                        <span class="font-black text-lg text-slate-700 truncate" id="sim-asset-name">...</span>
-                        <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold whitespace-nowrap" id="sim-current-qty">0</span>
+                        <span class="font-black text-base text-slate-700 truncate pr-2" id="sim-asset-name">...</span>
+                        <span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold whitespace-nowrap" id="sim-current-qty">0</span>
                     </div>
-                    <div class="mt-2 text-xs text-slate-500">PRU Actuel: <span class="font-bold text-slate-800" id="sim-current-pru">0 €</span></div>
+                    <div class="mt-2 text-[10px] text-slate-500">PRU Actuel: <span class="font-bold text-slate-800" id="sim-current-pru">0 €</span></div>
                 </div>
 
                 <div class="space-y-5">
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Type d'ordre</label>
+                        <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Type d'ordre</label>
                         <select id="sim-mode" class="w-full border border-gray-300 bg-white rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold" onchange="window.simulator.toggleMode()">
                             <option value="unique">⚡ Achat Unique</option>
                             <option value="dca">📅 DCA (Programmé)</option>
@@ -573,31 +576,31 @@
                     </div>
 
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Prix du Marché (Simulé)</label>
+                        <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Prix du Marché (Simulé)</label>
                         <div class="flex gap-2">
                             <input type="number" step="0.01" id="sim-current-price" class="flex-1 border border-gray-300 bg-white rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-blue-600" oninput="window.simulator.calculate()">
-                            <button class="bg-gray-200 px-3 rounded-lg text-gray-500 hover:bg-gray-300 border border-gray-300" onclick="window.simulator.calculate()" title="Rafraîchir le calcul"><i class="fa-solid fa-rotate"></i></button>
+                            <button class="bg-gray-200 px-3 rounded-lg text-gray-500 hover:bg-gray-300 border border-gray-300" onclick="window.simulator.calculate()" title="Rafraîchir"><i class="fa-solid fa-rotate text-xs"></i></button>
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1" id="lbl-amount">Somme à Investir (€)</label>
-                        <input type="number" step="1" id="sim-amount" class="w-full border-2 border-blue-300 bg-white rounded-lg p-3 text-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800 placeholder-gray-300" placeholder="ex: 500" oninput="window.simulator.calculate()">
+                        <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1" id="lbl-amount">Somme à Investir (€)</label>
+                        <input type="number" step="1" id="sim-amount" class="w-full border-2 border-blue-300 bg-white rounded-lg p-3 text-base focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800 placeholder-gray-300" placeholder="ex: 500" oninput="window.simulator.calculate()">
                     </div>
 
                     <div id="sim-dca-options" class="hidden space-y-4 pt-4 border-t border-slate-200 animate-fade-in">
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Durée (Mois)</label>
+                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Durée (Mois)</label>
                                 <input type="number" id="sim-duration" value="12" class="w-full border border-gray-300 bg-white rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold" oninput="window.simulator.calculate()">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tendance Prix</label>
+                                <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Tendance Prix</label>
                                 <select id="sim-trend" class="w-full border border-gray-300 bg-white rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none font-bold" onchange="window.simulator.calculate()">
                                     <option value="0">➡️ Stable (0%)</option>
-                                    <option value="5">↗️ Haussier (+5%/an)</option>
-                                    <option value="10">🚀 Bull Run (+10%/an)</option>
-                                    <option value="-10">↘️ Correction (-10%/an)</option>
+                                    <option value="5">↗️ Haussier (+5%)</option>
+                                    <option value="10">🚀 Bull (+10%)</option>
+                                    <option value="-10">↘️ Corr. (-10%)</option>
                                 </select>
                             </div>
                         </div>
@@ -605,33 +608,31 @@
                 </div>
             </div>
 
-            <div class="w-full md:w-2/3 p-6 flex flex-col relative bg-white">
-                <button onclick="window.simulator.close()" class="absolute top-4 right-4 text-slate-300 hover:text-slate-600 hidden md:block text-2xl transition">✕</button>
-                
-                <h3 class="text-lg font-bold text-slate-700 mb-6">Analyse d'Impact</h3>
+            <div class="w-full md:w-2/3 p-6 flex flex-col bg-white">
+                <h3 class="text-base font-bold text-slate-700 mb-6 mt-2 md:mt-0">Analyse d'Impact</h3>
 
-                <div class="grid grid-cols-3 gap-4 mb-6">
-                    <div class="bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-100 text-center">
-                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Nouveau PRU</p>
-                        <p id="res-new-pru" class="text-lg md:text-xl font-black text-slate-800">--</p>
-                        <div id="res-pru-diff" class="mt-1 inline-block text-[10px]"></div>
+                <div class="grid grid-cols-3 gap-3 mb-6">
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                        <p class="text-[9px] font-bold text-slate-400 uppercase mb-1">Nouveau PRU</p>
+                        <p id="res-new-pru" class="text-base md:text-lg font-black text-slate-800">--</p>
+                        <div id="res-pru-diff" class="mt-1 inline-block text-[9px]"></div>
                     </div>
-                    <div class="bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-100 text-center">
-                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Nouvelle Qté</p>
-                        <p id="res-qty" class="text-lg md:text-xl font-bold text-blue-600">--</p>
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                        <p class="text-[9px] font-bold text-slate-400 uppercase mb-1">Nouvelle Qté</p>
+                        <p id="res-qty" class="text-base md:text-lg font-bold text-blue-600">--</p>
                     </div>
-                    <div class="bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-100 text-center">
-                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">Poids Portif</p>
-                        <p id="res-weight" class="text-lg md:text-xl font-bold text-purple-600">--</p>
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                        <p class="text-[9px] font-bold text-slate-400 uppercase mb-1">Poids Portif</p>
+                        <p id="res-weight" class="text-base md:text-lg font-bold text-purple-600">--</p>
                     </div>
                 </div>
 
-                <div class="flex-1 bg-white rounded-xl border border-slate-100 p-4 shadow-inner relative min-h-[250px]">
+                <div class="flex-1 bg-white rounded-xl border border-slate-100 p-4 shadow-inner relative min-h-[250px] mb-4">
                     <canvas id="simChart"></canvas>
                 </div>
 
-                <div class="mt-6 flex justify-end">
-                    <button onclick="window.simulator.close(); window.app.openModal('new')" class="w-full md:w-auto bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-105 active:scale-95">
+                <div class="mt-auto flex justify-end">
+                    <button onclick="window.simulator.close(); window.app.openModal('new')" class="w-full md:w-auto bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-105 active:scale-95 text-sm">
                         <i class="fa-solid fa-check"></i> Passer l'ordre réel
                     </button>
                 </div>
