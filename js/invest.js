@@ -1119,47 +1119,52 @@ window.app = {
         container.innerHTML = '';
         const assets = this.getPortfolio();
         let found = false;
+        
+        // Date pour le filtre "12 derniers mois"
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
         Object.values(assets).forEach(a => {
             if(a.qty < 0.01) return;
 
+            // --- VARIABLES DE CALCUL ---
             let projectedAnnual = 0;
             let yieldPct = 0;
             let isEstimated = false;
             let totalReceivedLast12m = 0;
+            
+            // --- NOUVEAU : AGGRÉGATION PAR ANNÉE (HISTORIQUE) ---
+            const historyByYear = {};
+            const txs = this.transactions.filter(t => t.name === a.name && t.op === 'Dividende');
+            
+            txs.forEach(t => {
+                const year = t.date.substring(2, 4); // On garde juste "23", "24", "25"
+                const fullYear = t.date.substring(0, 4);
+                
+                // Calcul pour la rente future (basé sur 12 derniers mois glissants)
+                if(new Date(t.date) >= oneYearAgo) {
+                    totalReceivedLast12m += t.price;
+                }
 
-            // 1. On cherche les dividendes réels des 12 derniers mois
-            const divTxs = this.transactions.filter(t => 
-                t.name === a.name && 
-                t.op === 'Dividende' && 
-                new Date(t.date) >= oneYearAgo
-            );
+                // Aggrégation Annuelle
+                if(!historyByYear[year]) historyByYear[year] = 0;
+                historyByYear[year] += t.price;
+            });
 
-            if (divTxs.length > 0) {
+            // --- CALCUL DE LA RENTE FUTURE (Projection) ---
+            // On utilise la logique intelligente précédente
+            const recentDivs = txs.filter(t => new Date(t.date) >= oneYearAgo);
+            
+            if (recentDivs.length > 0) {
                 found = true;
                 let annualUnitDiv = 0;
-
-                // 2. Pour chaque versement, on calcule le montant UNITAIRE (par action)
-                divTxs.forEach(tx => {
-                    totalReceivedLast12m += tx.price; // tx.price est le montant total reçu
-                    
-                    // Combien d'actions avais-je ce jour-là ?
+                recentDivs.forEach(tx => {
                     const qtyAtDate = this.getQtyAtDate(a.name, tx.date);
-                    
-                    if (qtyAtDate > 0) {
-                        // Ex: J'ai reçu 50€ et j'avais 10 actions => 5€ / action
-                        annualUnitDiv += (tx.price / qtyAtDate);
-                    }
+                    if (qtyAtDate > 0) annualUnitDiv += (tx.price / qtyAtDate);
                 });
-
-                // 3. Projection : Dividende Unitaire annuel * Quantité ACTUELLE
-                // (Si j'ai racheté des actions depuis, ma rente future augmente mécaniquement)
                 projectedAnnual = annualUnitDiv * a.qty;
-
             } else {
-                // FALLBACK : Pas d'historique ? On garde l'estimation 3% ou la mockDB
+                // Fallback Estimation
                 isEstimated = true;
                 if(this.mockDividends[a.name]) {
                     projectedAnnual = a.qty * this.mockDividends[a.name].current;
@@ -1169,42 +1174,80 @@ window.app = {
                 }
             }
 
-            // Calcul du rendement sur PRU
+            // Calcul Yield
             if (projectedAnnual > 0) {
-                if(!found && isEstimated) found = true; // On affiche quand même les estimés
-                
+                if(!found && isEstimated) found = true;
                 const pru = a.invested / a.qty;
                 yieldPct = pru > 0 ? ((projectedAnnual / (a.qty * pru)) * 100).toFixed(2) : 0;
 
+                // --- STYLING ---
                 const col = this.strColor(a.name, 95, 90);
                 const border = this.strColor(a.name, 60, 50);
 
-                // Affichage
-                // J'ajoute une ligne "Reçu (12m)" pour comparer Réalité passée vs Projection future
+                // --- GÉNÉRATION DU MICRO-HISTOGRAMME ---
+                let chartHtml = '';
+                const years = Object.keys(historyByYear).sort();
+                
+                // On affiche le graph seulement si on a au moins une année de données
+                if (years.length > 0) {
+                    const maxVal = Math.max(...Object.values(historyByYear));
+                    
+                    const bars = years.map(y => {
+                        const val = historyByYear[y];
+                        const heightPct = (val / maxVal) * 100;
+                        // On force une hauteur minime de 10% pour que la barre soit visible même si petite
+                        const finalHeight = Math.max(heightPct, 10); 
+                        
+                        return `
+                            <div class="flex flex-col items-center justify-end group w-6">
+                                <div class="w-full bg-current opacity-60 hover:opacity-100 transition-all rounded-t-sm relative" 
+                                     style="height:${finalHeight}%; background-color: ${border};"
+                                     title="20${y}: ${val.toFixed(2)}€">
+                                </div>
+                                <span class="text-[8px] text-gray-400 mt-1">20${y}</span>
+                            </div>
+                        `;
+                    }).join('');
+
+                    chartHtml = `
+                        <div class="flex items-end gap-1 h-12 mt-3 mb-1 border-b border-gray-100 pb-1">
+                            ${bars}
+                        </div>
+                    `;
+                } else {
+                    // Espace vide pour garder l'alignement si pas d'historique
+                    chartHtml = `<div class="h-12 mt-3 mb-1 flex items-center justify-center text-[9px] text-gray-300 italic">Pas d'historique</div>`;
+                }
+
+                // --- RENDU FINAL DE LA CARTE ---
                 const receivedHtml = totalReceivedLast12m > 0 
-                    ? `<div class="text-[10px] text-gray-500 mt-1">Déjà perçu (12m): <span class="font-bold text-gray-700">${totalReceivedLast12m.toFixed(2)}€</span></div>`
+                    ? `<span class="text-[9px] font-normal text-gray-400 block mt-0.5">Reçu (12m): ${totalReceivedLast12m.toFixed(2)}€</span>`
                     : '';
 
                 container.innerHTML += `
-                    <div class="bg-white rounded-xl shadow-sm border p-4 relative overflow-hidden flex flex-col justify-between h-auto min-h-[140px]" style="background:${col}; border-color:${border}">
-                        <div class="flex justify-between font-bold z-10 relative mb-2" style="color:${border}">
+                    <div class="bg-white rounded-xl shadow-sm border p-4 relative overflow-hidden flex flex-col justify-between h-auto" style="background:${col}; border-color:${border}">
+                        <div class="flex justify-between font-bold z-10 relative" style="color:${border}">
                             <span class="truncate pr-2 text-sm">${a.name}</span>
-                            <i class="fa-solid fa-coins text-xs opacity-50"></i>
+                            <i class="fa-solid fa-chart-simple text-xs opacity-50"></i>
                         </div>
                         
                         <div class="z-10 relative">
+                            ${chartHtml}
+                        </div>
+                        
+                        <div class="z-10 relative mt-2 pt-2 border-t border-gray-200/50 flex justify-between items-end">
                             <div>
-                                <p class="text-[9px] text-gray-500 uppercase font-bold tracking-wider">Rente Future (Est.)</p>
-                                <p class="text-2xl font-black text-emerald-700">${projectedAnnual.toLocaleString('fr-FR', {style:'currency', currency:'EUR'})}</p>
+                                <p class="text-[9px] text-gray-500 uppercase font-bold tracking-wider">Rente Future</p>
+                                <p class="text-xl font-black text-emerald-700 leading-none">${projectedAnnual.toLocaleString('fr-FR', {style:'currency', currency:'EUR'})}</p>
                                 ${receivedHtml}
                             </div>
-                            <div class="text-right mt-3 pt-3 border-t border-gray-100/50">
-                                <p class="text-[9px] text-gray-500 uppercase">Rendement / PRU</p>
+                            <div class="text-right">
+                                <p class="text-[9px] text-gray-500 uppercase">Yield (PRU)</p>
                                 <p class="font-bold text-gray-700 text-sm">${yieldPct}%</p>
                             </div>
                         </div>
                         
-                        ${isEstimated ? `<div class="absolute top-2 right-8 text-[9px] text-orange-500 font-bold bg-white/80 px-2 py-0.5 rounded-full border border-orange-100">*Théorique (3%)</div>` : ''}
+                        ${isEstimated ? `<div class="absolute top-2 right-8 text-[8px] text-orange-500 font-bold bg-white/80 px-2 py-0.5 rounded-full border border-orange-100">Est. 3%</div>` : ''}
                     </div>`;
             }
         });
@@ -1217,7 +1260,7 @@ window.app = {
                 </div>`;
         }
     },
-
+    
     openModal: function(mode, id=null) {
         document.getElementById('modalForm').classList.remove('hidden');
         document.getElementById('editIndex').value = id !== null ? id : '';
