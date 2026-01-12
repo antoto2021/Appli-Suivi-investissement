@@ -111,7 +111,6 @@ window.app = {
             target.classList.remove('hidden');
             target.classList.add('block');
         } else {
-            // Fallback pour les sous-menus (assets, transactions...)
             const subTarget = document.getElementById(id + '-view');
             if(subTarget) subTarget.classList.remove('hidden');
         }
@@ -128,10 +127,12 @@ window.app = {
         if(id === 'assets') this.renderAssets();
         if(id === 'transactions') this.renderTable();
         
-        // --- C'EST ICI QUE CA CHANGE POUR PROJECTIONS ---
+        // --- LA LIGNE MANQUANTE EST ICI ---
+        if(id === 'dividends') this.renderDividends();
+        // ----------------------------------
+
         if(id === 'projections') { 
             this.initSimulatorInputs(); 
-            // On force la mise à jour des 2 nouveaux graphiques
             requestAnimationFrame(() => this.updateSimulations()); 
         }
         
@@ -142,7 +143,7 @@ window.app = {
         
         window.scrollTo({ top: 0, behavior: 'smooth' });
     },
-
+    
     loadData: async function() {
         try {
             const txData = await dbService.getAll('invest_tx');
