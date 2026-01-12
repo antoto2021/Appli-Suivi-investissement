@@ -1090,33 +1090,132 @@ window.app = {
                 </div>`;
         });
     },
+
+    // Calcule la quantité d'actions détenue à une date précise (pour le calcul précis des dividendes)
+    getQtyAtDate: function(name, dateStr) {
+        const targetDate = new Date(dateStr);
+        let qty = 0;
+        
+        // On rejoue l'histoire depuis le début jusqu'à la date cible
+        // On trie les transactions par date croissante pour être sûr de l'ordre
+        const sorted = [...this.transactions].sort((a,b) => new Date(a.date) - new Date(b.date));
+        
+        for (const tx of sorted) {
+            // Si la transaction est après la date cible, on arrête (on ne compte pas le futur)
+            if (new Date(tx.date) > targetDate) break;
+            
+            if (tx.name === name) {
+                if (tx.op === 'Achat' || tx.op === 'DCA') qty += tx.qty;
+                if (tx.op === 'Vente') qty -= tx.qty;
+            }
+        }
+        return qty;
+    },
     
     renderDividends: function() {
         const container = document.getElementById('dividendCards');
         if(!container) return;
+        
         container.innerHTML = '';
         const assets = this.getPortfolio();
         let found = false;
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
         Object.values(assets).forEach(a => {
             if(a.qty < 0.01) return;
-            const info = this.mockDividends[a.name] || { current: 0 };
-            if(info.current > 0) {
+
+            let projectedAnnual = 0;
+            let yieldPct = 0;
+            let isEstimated = false;
+            let totalReceivedLast12m = 0;
+
+            // 1. On cherche les dividendes réels des 12 derniers mois
+            const divTxs = this.transactions.filter(t => 
+                t.name === a.name && 
+                t.op === 'Dividende' && 
+                new Date(t.date) >= oneYearAgo
+            );
+
+            if (divTxs.length > 0) {
                 found = true;
-                const total = a.qty * info.current;
+                let annualUnitDiv = 0;
+
+                // 2. Pour chaque versement, on calcule le montant UNITAIRE (par action)
+                divTxs.forEach(tx => {
+                    totalReceivedLast12m += tx.price; // tx.price est le montant total reçu
+                    
+                    // Combien d'actions avais-je ce jour-là ?
+                    const qtyAtDate = this.getQtyAtDate(a.name, tx.date);
+                    
+                    if (qtyAtDate > 0) {
+                        // Ex: J'ai reçu 50€ et j'avais 10 actions => 5€ / action
+                        annualUnitDiv += (tx.price / qtyAtDate);
+                    }
+                });
+
+                // 3. Projection : Dividende Unitaire annuel * Quantité ACTUELLE
+                // (Si j'ai racheté des actions depuis, ma rente future augmente mécaniquement)
+                projectedAnnual = annualUnitDiv * a.qty;
+
+            } else {
+                // FALLBACK : Pas d'historique ? On garde l'estimation 3% ou la mockDB
+                isEstimated = true;
+                if(this.mockDividends[a.name]) {
+                    projectedAnnual = a.qty * this.mockDividends[a.name].current;
+                } else {
+                    const price = this.currentPrices[a.name] || this.currentPrices[a.ticker] || (a.invested / a.qty);
+                    projectedAnnual = (price * a.qty) * 0.03; 
+                }
+            }
+
+            // Calcul du rendement sur PRU
+            if (projectedAnnual > 0) {
+                if(!found && isEstimated) found = true; // On affiche quand même les estimés
+                
+                const pru = a.invested / a.qty;
+                yieldPct = pru > 0 ? ((projectedAnnual / (a.qty * pru)) * 100).toFixed(2) : 0;
+
                 const col = this.strColor(a.name, 95, 90);
                 const border = this.strColor(a.name, 60, 50);
+
+                // Affichage
+                // J'ajoute une ligne "Reçu (12m)" pour comparer Réalité passée vs Projection future
+                const receivedHtml = totalReceivedLast12m > 0 
+                    ? `<div class="text-[10px] text-gray-500 mt-1">Déjà perçu (12m): <span class="font-bold text-gray-700">${totalReceivedLast12m.toFixed(2)}€</span></div>`
+                    : '';
+
                 container.innerHTML += `
-                    <div class="bg-white rounded-xl shadow-sm border p-4" style="background:${col}; border-color:${border}">
-                        <div class="flex justify-between font-bold" style="color:${border}"><span>${a.name}</span><i class="fa-solid fa-coins"></i></div>
-                        <div class="mt-4 flex justify-between items-end">
-                            <div><p class="text-xs text-gray-500">Revenu Est.</p><p class="text-xl font-bold text-emerald-700">${total.toFixed(2)} €</p></div>
-                            <div class="text-right"><p class="text-xs text-gray-500">Unit.</p><p class="font-mono">${info.current} €</p></div>
+                    <div class="bg-white rounded-xl shadow-sm border p-4 relative overflow-hidden flex flex-col justify-between h-auto min-h-[140px]" style="background:${col}; border-color:${border}">
+                        <div class="flex justify-between font-bold z-10 relative mb-2" style="color:${border}">
+                            <span class="truncate pr-2 text-sm">${a.name}</span>
+                            <i class="fa-solid fa-coins text-xs opacity-50"></i>
                         </div>
+                        
+                        <div class="z-10 relative">
+                            <div>
+                                <p class="text-[9px] text-gray-500 uppercase font-bold tracking-wider">Rente Future (Est.)</p>
+                                <p class="text-2xl font-black text-emerald-700">${projectedAnnual.toLocaleString('fr-FR', {style:'currency', currency:'EUR'})}</p>
+                                ${receivedHtml}
+                            </div>
+                            <div class="text-right mt-3 pt-3 border-t border-gray-100/50">
+                                <p class="text-[9px] text-gray-500 uppercase">Rendement / PRU</p>
+                                <p class="font-bold text-gray-700 text-sm">${yieldPct}%</p>
+                            </div>
+                        </div>
+                        
+                        ${isEstimated ? `<div class="absolute top-2 right-8 text-[9px] text-orange-500 font-bold bg-white/80 px-2 py-0.5 rounded-full border border-orange-100">*Théorique (3%)</div>` : ''}
                     </div>`;
             }
         });
-        if(!found) document.getElementById('noDividends')?.classList.remove('hidden');
+
+        if(!found) {
+            container.innerHTML = `
+                <div class="col-span-full flex flex-col items-center justify-center text-gray-300 py-12">
+                    <i class="fa-solid fa-piggy-bank text-4xl mb-3"></i>
+                    <p>Aucun actif à dividende trouvé.</p>
+                </div>`;
+        }
     },
 
     openModal: function(mode, id=null) {
