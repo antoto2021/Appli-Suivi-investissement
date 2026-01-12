@@ -1091,20 +1091,23 @@ window.app = {
         });
     },
 
-    // Calcule la quantité d'actions détenue à une date précise (pour le calcul précis des dividendes)
-    getQtyAtDate: function(name, dateStr) {
+    // Calcule la quantité d'actions détenue à une date précise
+    // Amélioration : Vérifie le NOM ou le TICKER
+    getQtyAtDate: function(assetName, assetTicker, dateStr) {
         const targetDate = new Date(dateStr);
         let qty = 0;
         
-        // On rejoue l'histoire depuis le début jusqu'à la date cible
-        // On trie les transactions par date croissante pour être sûr de l'ordre
+        // On trie pour rejouer l'histoire chronologiquement
         const sorted = [...this.transactions].sort((a,b) => new Date(a.date) - new Date(b.date));
         
         for (const tx of sorted) {
-            // Si la transaction est après la date cible, on arrête (on ne compte pas le futur)
             if (new Date(tx.date) > targetDate) break;
             
-            if (tx.name === name) {
+            // LA CORRECTION EST ICI :
+            // On considère que c'est le bon actif si le Nom match OU si le Ticker match
+            const isMatch = (tx.name === assetName) || (assetTicker && tx.ticker && tx.ticker === assetTicker);
+            
+            if (isMatch) {
                 if (tx.op === 'Achat' || tx.op === 'DCA') qty += tx.qty;
                 if (tx.op === 'Vente') qty -= tx.qty;
             }
