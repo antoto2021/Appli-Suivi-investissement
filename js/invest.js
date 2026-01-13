@@ -1129,8 +1129,7 @@ window.app = {
         Object.values(assets).forEach(a => {
             if(a.qty < 0.01) return;
 
-            // --- 1. FILTRE STRICT : On cherche les dividendes réels ---
-            // On cherche toutes les transactions "Dividende" liées à cet actif
+            // 1. FILTRE : On cherche les dividendes de cet actif
             const txs = this.transactions.filter(t => 
                 t.op === 'Dividende' && (
                     t.name === a.name || 
@@ -1138,51 +1137,56 @@ window.app = {
                 )
             );
             
-            // SI AUCUN DIVIDENDE TROUVÉ DANS L'HISTORIQUE : ON NE FAIT RIEN (Pas d'affichage)
             if (txs.length === 0) return;
-
-            // Si on arrive ici, c'est qu'il y a des dividendes, donc on affiche la carte
             found = true;
 
             let projectedAnnual = 0;
             let totalReceivedLast12m = 0;
             const historyByYear = {};
 
-            // --- 2. TRAITEMENT DES DONNÉES ---
+            // --- 2. TRAITEMENT DES DONNÉES (CORRECTION ICI) ---
             txs.forEach(t => {
                 const year = t.date.substring(2, 4); // "23", "24"
                 
-                // Calcul sommes 12 derniers mois (Réel perçu)
+                // CORRECTION : On multiplie le Prix par la Quantité pour avoir le TOTAL REÇU
+                // (Si vous n'avez pas mis de quantité, on assume 1 par défaut)
+                const realAmountReceived = t.price * (t.qty || 1);
+
+                // Calcul sommes 12 derniers mois
                 if(new Date(t.date) >= oneYearAgo) {
-                    totalReceivedLast12m += t.price;
+                    totalReceivedLast12m += realAmountReceived;
                 }
 
                 // Aggrégation pour le Graphique
                 if(!historyByYear[year]) historyByYear[year] = 0;
-                historyByYear[year] += t.price;
+                historyByYear[year] += realAmountReceived;
             });
 
-            // --- 3. PROJECTION FUTURE (Basée sur l'historique récent) ---
+            // --- 3. PROJECTION FUTURE ---
             const recentDivs = txs.filter(t => new Date(t.date) >= oneYearAgo);
             
             if (recentDivs.length > 0) {
                 let annualUnitDiv = 0;
                 recentDivs.forEach(tx => {
-                    const qtyAtDate = this.getQtyAtDate(a.name, a.ticker, tx.date);
-                    if (qtyAtDate > 0) annualUnitDiv += (tx.price / qtyAtDate);
+                    const realAmountReceived = tx.price * (tx.qty || 1);
+                    
+                    // On recalcule le dividende par action historique
+                    // (Montant Total Reçu / Nombre d'actions possédées CE JOUR LÀ)
+                    const qtyOwnedAtDate = this.getQtyAtDate(a.name, a.ticker, tx.date);
+                    
+                    if (qtyOwnedAtDate > 0) {
+                        annualUnitDiv += (realAmountReceived / qtyOwnedAtDate);
+                    }
                 });
                 projectedAnnual = annualUnitDiv * a.qty;
             } else {
-                // Cas rare : Dividendes anciens mais rien depuis 1 an (coupure de dividende ?)
-                // On affiche quand même la carte avec 0 en projection pour alerter
+                // Cas : Pas de dividende récent = Projection 0 (Alert)
                 projectedAnnual = 0;
             }
 
             // --- 4. AFFICHAGE ---
             const pru = a.invested / a.qty;
             const yieldPct = pru > 0 ? ((projectedAnnual / (a.qty * pru)) * 100).toFixed(2) : 0;
-
-            // Couleurs : On garde la couleur seulement pour la bordure et le graph
             const border = this.strColor(a.name, 60, 50);
 
             // Génération Histogramme
@@ -1208,7 +1212,6 @@ window.app = {
                         </div>
                     `;
                 }).join('');
-
                 chartHtml = `<div class="flex items-end gap-1 h-12 mt-2 border-b border-gray-100 pb-1">${bars}</div>`;
             }
 
@@ -1216,7 +1219,6 @@ window.app = {
                 ? `<span class="text-[9px] font-normal text-gray-400 block mt-0.5">Reçu (12m): ${totalReceivedLast12m.toFixed(2)}€</span>`
                 : '';
 
-            // MODIFICATION VISUELLE : background:white et border-left plus épais
             container.innerHTML += `
                 <div class="bg-white rounded-xl shadow-sm border p-4 relative overflow-visible flex flex-col justify-between h-auto" 
                      style="border-color:${border}; border-width:1px; border-left-width:4px;">
@@ -1249,7 +1251,6 @@ window.app = {
                 <div class="col-span-full flex flex-col items-center justify-center text-gray-300 py-12">
                     <i class="fa-solid fa-chart-bar text-4xl mb-3 opacity-20"></i>
                     <p class="text-sm">Aucun historique de dividende détecté.</p>
-                    <p class="text-[10px] mt-1 text-gray-400">Ajoutez des opérations "Dividende" dans le journal.</p>
                 </div>`;
         }
     },
