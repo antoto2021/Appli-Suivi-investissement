@@ -1129,12 +1129,7 @@ window.app = {
         Object.values(assets).forEach(a => {
             if(a.qty < 0.01) return;
 
-            let projectedAnnual = 0;
-            let yieldPct = 0;
-            let isEstimated = false;
-            let totalReceivedLast12m = 0;
-            
-            // --- 1. RÉCUPÉRATION ROBUSTE (NOM OU TICKER) ---
+            // --- 1. FILTRE STRICT : On cherche les dividendes réels ---
             // On cherche toutes les transactions "Dividende" liées à cet actif
             const txs = this.transactions.filter(t => 
                 t.op === 'Dividende' && (
@@ -1143,121 +1138,118 @@ window.app = {
                 )
             );
             
-            // --- 2. HISTORIQUE PAR ANNÉE (POUR LE GRAPHIQUE) ---
+            // SI AUCUN DIVIDENDE TROUVÉ DANS L'HISTORIQUE : ON NE FAIT RIEN (Pas d'affichage)
+            if (txs.length === 0) return;
+
+            // Si on arrive ici, c'est qu'il y a des dividendes, donc on affiche la carte
+            found = true;
+
+            let projectedAnnual = 0;
+            let totalReceivedLast12m = 0;
             const historyByYear = {};
-            
+
+            // --- 2. TRAITEMENT DES DONNÉES ---
             txs.forEach(t => {
                 const year = t.date.substring(2, 4); // "23", "24"
                 
-                // Calcul sommes 12 derniers mois
+                // Calcul sommes 12 derniers mois (Réel perçu)
                 if(new Date(t.date) >= oneYearAgo) {
                     totalReceivedLast12m += t.price;
                 }
 
+                // Aggrégation pour le Graphique
                 if(!historyByYear[year]) historyByYear[year] = 0;
                 historyByYear[year] += t.price;
             });
 
-            // --- 3. CALCUL DE LA RENTE FUTURE ---
+            // --- 3. PROJECTION FUTURE (Basée sur l'historique récent) ---
             const recentDivs = txs.filter(t => new Date(t.date) >= oneYearAgo);
             
             if (recentDivs.length > 0) {
-                found = true;
                 let annualUnitDiv = 0;
                 recentDivs.forEach(tx => {
-                    // On passe le ticker à la fonction pour assurer le calcul de quantité
                     const qtyAtDate = this.getQtyAtDate(a.name, a.ticker, tx.date);
                     if (qtyAtDate > 0) annualUnitDiv += (tx.price / qtyAtDate);
                 });
                 projectedAnnual = annualUnitDiv * a.qty;
             } else {
-                // Fallback Estimation
-                isEstimated = true;
-                if(this.mockDividends[a.name]) {
-                    projectedAnnual = a.qty * this.mockDividends[a.name].current;
-                } else {
-                    const price = this.currentPrices[a.name] || this.currentPrices[a.ticker] || (a.invested / a.qty);
-                    projectedAnnual = (price * a.qty) * 0.03; 
-                }
+                // Cas rare : Dividendes anciens mais rien depuis 1 an (coupure de dividende ?)
+                // On affiche quand même la carte avec 0 en projection pour alerter
+                projectedAnnual = 0;
             }
 
             // --- 4. AFFICHAGE ---
-            if (projectedAnnual > 0 || totalReceivedLast12m > 0) {
-                // Même si projection nulle, si on a reçu des sous, on affiche la carte
-                if(!found && (projectedAnnual > 0 || totalReceivedLast12m > 0)) found = true;
-                
-                const pru = a.invested / a.qty;
-                yieldPct = pru > 0 ? ((projectedAnnual / (a.qty * pru)) * 100).toFixed(2) : 0;
+            const pru = a.invested / a.qty;
+            const yieldPct = pru > 0 ? ((projectedAnnual / (a.qty * pru)) * 100).toFixed(2) : 0;
 
-                const col = this.strColor(a.name, 95, 90);
-                const border = this.strColor(a.name, 60, 50);
+            // Couleurs : On garde la couleur seulement pour la bordure et le graph
+            const border = this.strColor(a.name, 60, 50);
 
-                // Génération Histogramme
-                let chartHtml = '';
-                const years = Object.keys(historyByYear).sort();
-                
-                if (years.length > 0) {
-                    const maxVal = Math.max(...Object.values(historyByYear));
-                    const bars = years.map(y => {
-                        const val = historyByYear[y];
-                        const heightPct = (val / maxVal) * 100;
-                        const finalHeight = Math.max(heightPct, 15); 
-                        
-                        return `
-                            <div class="flex flex-col items-center justify-end group w-6 cursor-help">
-                                <div class="w-full bg-current opacity-60 group-hover:opacity-100 transition-all rounded-t-sm relative" 
-                                     style="height:${finalHeight}%; background-color: ${border};">
-                                     <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-slate-800 text-white text-[8px] p-1 rounded whitespace-nowrap z-20">
-                                        20${y}: ${val.toFixed(2)}€
-                                     </div>
-                                </div>
-                                <span class="text-[8px] text-gray-400 mt-1">20${y}</span>
+            // Génération Histogramme
+            let chartHtml = '';
+            const years = Object.keys(historyByYear).sort();
+            
+            if (years.length > 0) {
+                const maxVal = Math.max(...Object.values(historyByYear));
+                const bars = years.map(y => {
+                    const val = historyByYear[y];
+                    const heightPct = (val / maxVal) * 100;
+                    const finalHeight = Math.max(heightPct, 15); 
+                    
+                    return `
+                        <div class="flex flex-col items-center justify-end group w-6 cursor-help">
+                            <div class="w-full opacity-60 group-hover:opacity-100 transition-all rounded-t-sm relative" 
+                                    style="height:${finalHeight}%; background-color: ${border};">
+                                    <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-slate-800 text-white text-[8px] p-1 rounded whitespace-nowrap z-20">
+                                    20${y}: ${val.toFixed(2)}€
+                                    </div>
                             </div>
-                        `;
-                    }).join('');
-
-                    chartHtml = `<div class="flex items-end gap-1 h-10 mt-2 border-b border-gray-100 pb-1">${bars}</div>`;
-                } else {
-                    chartHtml = `<div class="h-10 mt-2 flex items-center justify-center text-[9px] text-gray-300 italic">Pas d'historique</div>`;
-                }
-
-                const receivedHtml = totalReceivedLast12m > 0 
-                    ? `<span class="text-[9px] font-normal text-gray-400 block mt-0.5">Reçu (12m): ${totalReceivedLast12m.toFixed(2)}€</span>`
-                    : '';
-
-                container.innerHTML += `
-                    <div class="bg-white rounded-xl shadow-sm border p-4 relative overflow-visible flex flex-col justify-between h-auto" style="background:${col}; border-color:${border}">
-                        <div class="flex justify-between font-bold z-10 relative" style="color:${border}">
-                            <span class="truncate pr-2 text-sm">${a.name}</span>
-                            <span class="text-[9px] bg-white/50 px-1 rounded border border-current opacity-70">${a.ticker || 'N/A'}</span>
+                            <span class="text-[8px] text-gray-400 mt-1">20${y}</span>
                         </div>
-                        
-                        <div class="z-10 relative mb-1">
-                            ${chartHtml}
-                        </div>
-                        
-                        <div class="z-10 relative mt-1 flex justify-between items-end">
-                            <div>
-                                <p class="text-[9px] text-gray-500 uppercase font-bold tracking-wider">Rente Future</p>
-                                <p class="text-xl font-black text-emerald-700 leading-none">${projectedAnnual.toLocaleString('fr-FR', {style:'currency', currency:'EUR'})}</p>
-                                ${receivedHtml}
-                            </div>
-                            <div class="text-right">
-                                <p class="text-[9px] text-gray-500 uppercase">Yield</p>
-                                <p class="font-bold text-gray-700 text-sm">${yieldPct}%</p>
-                            </div>
-                        </div>
-                        ${isEstimated ? `<div class="absolute top-9 right-2 text-[8px] text-orange-500 font-bold bg-white/90 px-2 py-0.5 rounded-full border border-orange-100 shadow-sm z-20">Est. 3%</div>` : ''}
-                    </div>`;
+                    `;
+                }).join('');
+
+                chartHtml = `<div class="flex items-end gap-1 h-12 mt-2 border-b border-gray-100 pb-1">${bars}</div>`;
             }
+
+            const receivedHtml = totalReceivedLast12m > 0 
+                ? `<span class="text-[9px] font-normal text-gray-400 block mt-0.5">Reçu (12m): ${totalReceivedLast12m.toFixed(2)}€</span>`
+                : '';
+
+            // MODIFICATION VISUELLE : background:white et border-left plus épais
+            container.innerHTML += `
+                <div class="bg-white rounded-xl shadow-sm border p-4 relative overflow-visible flex flex-col justify-between h-auto" 
+                     style="border-color:${border}; border-width:1px; border-left-width:4px;">
+                    
+                    <div class="flex justify-between font-bold z-10 relative" style="color:${border}">
+                        <span class="truncate pr-2 text-sm text-gray-800">${a.name}</span>
+                        <span class="text-[9px] bg-gray-100 text-gray-500 px-1 rounded border border-gray-200">${a.ticker || 'N/A'}</span>
+                    </div>
+                    
+                    <div class="z-10 relative mb-1">
+                        ${chartHtml}
+                    </div>
+                    
+                    <div class="z-10 relative mt-1 flex justify-between items-end">
+                        <div>
+                            <p class="text-[9px] text-gray-500 uppercase font-bold tracking-wider">Rente Future</p>
+                            <p class="text-xl font-black text-gray-800 leading-none">${projectedAnnual.toLocaleString('fr-FR', {style:'currency', currency:'EUR'})}</p>
+                            ${receivedHtml}
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[9px] text-gray-500 uppercase">Yield</p>
+                            <p class="font-bold text-gray-700 text-sm">${yieldPct}%</p>
+                        </div>
+                    </div>
+                </div>`;
         });
 
         if(!found) {
             container.innerHTML = `
                 <div class="col-span-full flex flex-col items-center justify-center text-gray-300 py-12">
-                    <i class="fa-solid fa-piggy-bank text-4xl mb-3"></i>
-                    <p>Aucun historique de dividende trouvé.</p>
-                    <p class="text-xs mt-2">Assurez-vous que le Ticker est renseigné dans vos transactions.</p>
+                    <i class="fa-solid fa-chart-bar text-4xl mb-3 opacity-20"></i>
+                    <p class="text-sm">Aucun historique de dividende détecté.</p>
+                    <p class="text-[10px] mt-1 text-gray-400">Ajoutez des opérations "Dividende" dans le journal.</p>
                 </div>`;
         }
     },
