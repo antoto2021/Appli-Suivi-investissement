@@ -3,7 +3,7 @@ window.app = {
     currentPrices: {},
     charts: {},
     simData: { monthlySavings: 0, initialized: false },
-    assetFilter: 'Tout', // État pour stocker le filtre actif
+    assetFilter: 'Tout',
     
     tickerDB: {
         'total': 'TTE.PA', 'vinci': 'DG.PA', 'air liquide': 'AI.PA', 'lvmh': 'MC.PA',
