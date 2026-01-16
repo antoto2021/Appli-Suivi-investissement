@@ -39,6 +39,21 @@ window.app = {
         window.addEventListener('budget-update', () => this.renderBankSummary());
     },
 
+    init: async function() {
+        console.log("Démarrage App Bourse...");
+        await this.loadData();
+        
+        // --- NOUVEAU : On génère les lignes DCA manquantes ---
+        await this.checkAndGenerateDCA();
+        // ----------------------------------------------------
+
+        if(document.getElementById('dailyTip')) this.loadDailyTip();
+        this.setupAutoFill();
+        this.renderTable();
+        this.renderBankSummary(); 
+        window.addEventListener('budget-update', () => this.renderBankSummary());
+    },
+
     // --- NOUVELLE LOGIQUE BANQUE ---
     renderBankSummary: async function() {
         // 1. Récupérer le solde initial (sauvegardé ou 0)
@@ -161,6 +176,76 @@ window.app = {
         else this.transactions.push(tx);
     },
 
+    // Vérifie les DCA et génère les transactions d'achat pour les échéances passées
+    checkAndGenerateDCA: async function() {
+        console.log("Vérification des échéances DCA...");
+        const now = new Date();
+        let changesMade = false;
+
+        // On ne regarde que les configurations DCA
+        const dcaMasters = this.transactions.filter(t => t.op === 'DCA');
+
+        for (const master of dcaMasters) {
+            const startDate = new Date(master.date);
+            const durationMonths = master.dcaDuration || 12; // Par défaut 12 mois
+            const freqPerMonth = master.dcaFreq || 1; // Par défaut 1 fois/mois
+            const monthlyAmount = master.dcaTotal / (durationMonths * freqPerMonth); // Montant par virement
+            
+            // Intervalle en jours entre deux achats
+            const daysInterval = 30 / freqPerMonth; 
+
+            // On boucle sur chaque échéance théorique
+            for (let i = 0; i < (durationMonths * freqPerMonth); i++) {
+                
+                // Calcul de la date théorique de cet achat (Date début + X jours)
+                const targetDate = new Date(startDate);
+                targetDate.setDate(startDate.getDate() + (i * daysInterval));
+                
+                // ARRÊT : Si la date théorique est dans le futur, on arrête de générer
+                if (targetDate > now) break;
+
+                // Identification unique de cette occurrence (ex: "DCA-1688844-occurrence-3")
+                const occurrenceId = `dca-${master.id}-occ-${i}`;
+
+                // VÉRIFICATION : Est-ce que cette ligne existe déjà ?
+                const exists = this.transactions.find(t => t.dcaRef === occurrenceId);
+
+                if (!exists) {
+                    // CRÉATION DE LA LIGNE D'ACHAT
+                    console.log(`Génération achat DCA pour ${master.name} au ${targetDate.toLocaleDateString()}`);
+                    
+                    // Estimation du prix (Dernier prix connu ou prix saisi dans le master)
+                    const estimatedPrice = this.currentPrices[master.ticker] || this.currentPrices[master.name] || master.price || 1;
+                    const estimatedQty = monthlyAmount / estimatedPrice;
+
+                    const newTx = {
+                        id: Date.now() + Math.random(), // ID unique
+                        date: targetDate.toISOString().split('T')[0],
+                        op: 'Achat', // C'est un vrai achat maintenant
+                        name: master.name,
+                        ticker: master.ticker,
+                        account: master.account,
+                        sector: master.sector,
+                        qty: estimatedQty,
+                        price: estimatedPrice,
+                        dcaRef: occurrenceId, // Lien vers le parent pour ne pas le recréer
+                        isAutoDCA: true // Marqueur visuel
+                    };
+
+                    // Ajout direct dans la DB et dans la liste mémoire
+                    await window.dbService.add('invest_tx', newTx);
+                    this.transactions.push(newTx);
+                    changesMade = true;
+                }
+            }
+        }
+
+        if (changesMade) {
+            this.toast("Échéances DCA générées 🔄");
+            this.renderTable(); // Rafraîchir le journal
+        }
+    },
+
     updatePrice: async function(name, price, ticker=null) {
         const val = parseFloat(price);
         this.currentPrices[name] = val;
@@ -180,60 +265,38 @@ window.app = {
 
     getPortfolio: function() {
         const assets = {};
-        const now = new Date();
+        
+        // On trie par date pour que le calcul du PRU soit chronologique et juste
+        const sortedTxs = [...this.transactions].sort((a,b) => new Date(a.date) - new Date(b.date));
 
-        this.transactions.forEach(tx => {
-            if(tx.op === 'Dividende') return;
+        sortedTxs.forEach(tx => {
+            // ON IGNORE LES MASTERS DCA (Ce sont juste des configs maintenant)
+            if(tx.op === 'DCA' || tx.op === 'Dividende') return;
+
             if(!assets[tx.name]) assets[tx.name] = { 
-                name: tx.name, qty: 0, invested: 0, ticker: tx.ticker||'', account: tx.account || 'Autre',
-                activeDCA: false // Nouveau champ par défaut
+                name: tx.name, qty: 0, invested: 0, ticker: tx.ticker||'', account: tx.account || 'Autre'
             };
             
             if(tx.op === 'Achat') {
                 assets[tx.name].qty += tx.qty;
                 assets[tx.name].invested += (tx.qty * tx.price);
+                // Met à jour le compte avec le dernier mouvement
                 if(tx.account) assets[tx.name].account = tx.account; 
             } 
             else if(tx.op === 'Vente') {
-                const pru = assets[tx.name].invested / (assets[tx.name].qty + tx.qty) || 0;
+                // Calcul du PRU avant la vente pour sortir la bonne valeur
+                const pru = assets[tx.name].qty > 0 ? (assets[tx.name].invested / assets[tx.name].qty) : 0;
                 assets[tx.name].qty -= tx.qty;
+                // On sort du capital investi à hauteur du PRU (pas du prix de vente)
                 assets[tx.name].invested -= (tx.qty * pru);
             }
-            else if(tx.op === 'DCA') {
-                const startDate = new Date(tx.date);
-                if (startDate > now) return; 
-
-                let monthsPassed = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
-                if (now.getDate() >= startDate.getDate()) monthsPassed += 1;
-                
-                const effectiveMonths = Math.min(Math.max(0, monthsPassed), tx.dcaDuration);
-                
-                // Si le DCA est toujours en cours (moins de mois passés que la durée totale)
-                if (effectiveMonths < tx.dcaDuration) {
-                    assets[tx.name].activeDCA = true; // On active le drapeau
-                }
-
-                if (effectiveMonths > 0) {
-                    const totalExecutions = tx.dcaDuration * tx.dcaFreq;
-                    const amountPerExecution = tx.dcaTotal / totalExecutions;
-                    const executionsDone = effectiveMonths * tx.dcaFreq;
-                    const investedSoFar = executionsDone * amountPerExecution;
-                    
-                    let priceRef = tx.price; 
-                    if (!priceRef || priceRef === 0) {
-                        const existingAsset = assets[tx.name];
-                        priceRef = (existingAsset && existingAsset.qty > 0) 
-                            ? (this.currentPrices[tx.name] || (existingAsset.invested/existingAsset.qty)) 
-                            : 100; 
-                    }
-                    const estimatedQty = investedSoFar / priceRef;
-
-                    assets[tx.name].invested += investedSoFar;
-                    assets[tx.name].qty += estimatedQty;
-                    if(tx.account) assets[tx.name].account = tx.account;
-                }
-            }
         });
+
+        // Nettoyage des petits résidus de flottants (ex: 0.0000001)
+        Object.keys(assets).forEach(k => {
+            if(assets[k].qty < 0.0001) delete assets[k];
+        });
+
         return assets;
     },
     
