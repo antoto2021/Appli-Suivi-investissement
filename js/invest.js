@@ -412,7 +412,7 @@ window.app = {
     },
 
     // 3. Fonction principale appelée par les inputs "onchange"
-        updateSimulations: function() {
+    updateSimulations: function() {
         // On lance d'abord le simulateur de patrimoine
         this.renderWealthSimulator();
         this.renderCompoundInterest();
@@ -985,21 +985,57 @@ window.app = {
 
     setupAutoFill: function() {
         const el = document.getElementById('fName');
-        if(el) {
-            el.addEventListener('blur', (e) => {
-                const val = e.target.value.toLowerCase().trim();
-                const tickerInput = document.getElementById('fTicker');
-                if(tickerInput.value !== '') return;
+        if(!el) return;
+
+        // On utilise l'événement 'blur' (quand on quitte le champ) pour ne pas gêner la saisie
+        el.addEventListener('blur', (e) => {
+            const val = e.target.value.trim(); // On garde la casse d'origine pour l'affichage, mais on compare en minuscule
+            if(!val) return;
+            
+            const lowerVal = val.toLowerCase();
+
+            // 1. GESTION DU TICKER (Existante + Améliorée)
+            const tickerInput = document.getElementById('fTicker');
+            
+            // A. D'abord on regarde dans l'historique (plus précis que la DB générique)
+            // On cherche une transaction existante avec ce nom
+            const knownTx = this.transactions.find(t => t.name.toLowerCase() === lowerVal);
+
+            if (knownTx) {
+                // Remplissage automatique basé sur l'historique
+                const accInput = document.getElementById('fAccount');
+                const secInput = document.getElementById('fSector');
+
+                // Si le champ Compte est vide et qu'on connait le compte, on remplit
+                if(accInput && accInput.value === '' && knownTx.account) {
+                    accInput.value = knownTx.account;
+                }
+
+                // Si le champ Secteur est vide et qu'on connait le secteur, on remplit
+                if(secInput && secInput.value === '' && knownTx.sector) {
+                    secInput.value = knownTx.sector;
+                }
+
+                // Si le champ Ticker est vide, on le prend de l'historique
+                if(tickerInput && tickerInput.value === '' && knownTx.ticker) {
+                    tickerInput.value = knownTx.ticker;
+                    // On ne met pas de toast ici pour rester discret
+                }
+            }
+
+            // B. Si le ticker est toujours vide, on tente la base de données générique (Fallback)
+            if(tickerInput && tickerInput.value === '') {
                 for(const [k,t] of Object.entries(this.tickerDB)) { 
-                    if(val.includes(k)) { 
+                    if(lowerVal.includes(k)) { 
                         tickerInput.value = t; 
                         this.toast(`Ticker trouvé : ${t}`);
                         break; 
                     }
                 }
-            });
-        }
+            }
+        });
     },
+
     
     toggleDCAFields: function() {
         const op = document.getElementById('fOp').value;
