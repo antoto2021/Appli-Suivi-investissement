@@ -177,62 +177,61 @@ window.app = {
     },
 
     // Vérifie les DCA et génère les transactions d'achat pour les échéances passées
-    checkAndGenerateDCA: async function() {
+        checkAndGenerateDCA: async function() {
         console.log("Vérification des échéances DCA...");
         const now = new Date();
         let changesMade = false;
 
-        // On ne regarde que les configurations DCA
+        // On filtre les "Masters" DCA
         const dcaMasters = this.transactions.filter(t => t.op === 'DCA');
 
         for (const master of dcaMasters) {
             const startDate = new Date(master.date);
-            const durationMonths = master.dcaDuration || 12; // Par défaut 12 mois
-            const freqPerMonth = master.dcaFreq || 1; // Par défaut 1 fois/mois
-            const monthlyAmount = master.dcaTotal / (durationMonths * freqPerMonth); // Montant par virement
+            const durationMonths = parseInt(master.dcaDuration) || 12;
+            const freqPerMonth = parseInt(master.dcaFreq) || 1;
+            const totalEcheances = durationMonths * freqPerMonth;
+            const amountPerExec = master.dcaTotal / totalEcheances;
             
-            // Intervalle en jours entre deux achats
             const daysInterval = 30 / freqPerMonth; 
 
-            // On boucle sur chaque échéance théorique
-            for (let i = 0; i < (durationMonths * freqPerMonth); i++) {
-                
-                // Calcul de la date théorique de cet achat (Date début + X jours)
+            for (let i = 0; i < totalEcheances; i++) {
                 const targetDate = new Date(startDate);
                 targetDate.setDate(startDate.getDate() + (i * daysInterval));
                 
-                // ARRÊT : Si la date théorique est dans le futur, on arrête de générer
+                // Si l'échéance est dans le futur, on s'arrête pour ce Master
                 if (targetDate > now) break;
 
-                // Identification unique de cette occurrence (ex: "DCA-1688844-occurrence-3")
-                const occurrenceId = `dca-${master.id}-occ-${i}`;
+                const dateStr = targetDate.toISOString().split('T')[0];
+                // On crée une clé unique stable (convertie en string pour éviter les bugs d'ID)
+                const occurrenceId = `dca-${String(master.id)}-occ-${i}`;
 
-                // VÉRIFICATION : Est-ce que cette ligne existe déjà ?
-                const exists = this.transactions.find(t => t.dcaRef === occurrenceId);
+                // --- DOUBLE VÉRIFICATION ANTI-DOUBLON ---
+                const exists = this.transactions.find(t => 
+                    // 1. Soit la référence unique correspond
+                    t.dcaRef === occurrenceId || 
+                    // 2. Soit on a déjà un achat auto pour ce nom EXACT à cette date EXACTE
+                    (t.isAutoDCA && t.name === master.name && t.date === dateStr)
+                );
 
                 if (!exists) {
-                    // CRÉATION DE LA LIGNE D'ACHAT
-                    console.log(`Génération achat DCA pour ${master.name} au ${targetDate.toLocaleDateString()}`);
+                    console.log(`[DCA] Création de l'échéance ${i+1} pour ${master.name} (${dateStr})`);
                     
-                    // Estimation du prix (Dernier prix connu ou prix saisi dans le master)
                     const estimatedPrice = this.currentPrices[master.ticker] || this.currentPrices[master.name] || master.price || 1;
-                    const estimatedQty = monthlyAmount / estimatedPrice;
-
+                    
                     const newTx = {
-                        id: Date.now() + Math.random(), // ID unique
-                        date: targetDate.toISOString().split('T')[0],
-                        op: 'Achat', // C'est un vrai achat maintenant
+                        id: Date.now() + Math.random(), 
+                        date: dateStr,
+                        op: 'Achat',
                         name: master.name,
                         ticker: master.ticker,
                         account: master.account,
                         sector: master.sector,
-                        qty: estimatedQty,
+                        qty: amountPerExec / estimatedPrice,
                         price: estimatedPrice,
-                        dcaRef: occurrenceId, // Lien vers le parent pour ne pas le recréer
-                        isAutoDCA: true // Marqueur visuel
+                        dcaRef: occurrenceId, // Marqueur technique
+                        isAutoDCA: true      // Marqueur visuel pour le journal
                     };
 
-                    // Ajout direct dans la DB et dans la liste mémoire
                     await window.dbService.add('invest_tx', newTx);
                     this.transactions.push(newTx);
                     changesMade = true;
@@ -241,8 +240,10 @@ window.app = {
         }
 
         if (changesMade) {
-            this.toast("Échéances DCA générées 🔄");
-            this.renderTable(); // Rafraîchir le journal
+            this.toast("Échéances DCA mises à jour 🔄");
+            this.renderTable();
+        } else {
+            console.log("[DCA] Tout est à jour, aucune ligne générée.");
         }
     },
 
