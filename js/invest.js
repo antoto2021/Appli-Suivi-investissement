@@ -177,73 +177,86 @@ window.app = {
     },
 
     // Vérifie les DCA et génère les transactions d'achat pour les échéances passées
-        checkAndGenerateDCA: async function() {
-        console.log("Vérification des échéances DCA...");
+    checkAndGenerateDCA: async function() {
+        console.log("--- Début vérification DCA (Mode Strict) ---");
         const now = new Date();
         let changesMade = false;
 
-        // On filtre les "Masters" DCA
+        // On filtre les configurations DCA
         const dcaMasters = this.transactions.filter(t => t.op === 'DCA');
 
         for (const master of dcaMasters) {
             const startDate = new Date(master.date);
+            // Sécurités pour éviter les boucles infinies
             const durationMonths = parseInt(master.dcaDuration) || 12;
             const freqPerMonth = parseInt(master.dcaFreq) || 1;
-            const totalEcheances = durationMonths * freqPerMonth;
-            const amountPerExec = master.dcaTotal / totalEcheances;
             
-            const daysInterval = 30 / freqPerMonth; 
+            // Calcul du montant unitaire
+            const totalOccurrences = durationMonths * freqPerMonth;
+            const amountPerExec = master.dcaTotal / totalOccurrences;
 
-            for (let i = 0; i < totalEcheances; i++) {
-                const targetDate = new Date(startDate);
-                targetDate.setDate(startDate.getDate() + (i * daysInterval));
+            // Boucle sur chaque occurrence théorique
+            for (let i = 0; i < totalOccurrences; i++) {
                 
-                // Si l'échéance est dans le futur, on s'arrête pour ce Master
+                // --- CALCUL DE DATE PRÉCIS (MOIS PAR MOIS) ---
+                let targetDate = new Date(startDate);
+                
+                if(freqPerMonth === 1) {
+                    // Si mensuel : on ajoute i mois pile
+                    targetDate.setMonth(startDate.getMonth() + i);
+                } else {
+                    // Si fréquence élevée (hebdo/bi-mensuel) : on garde l'ajout de jours
+                    const daysInterval = 30 / freqPerMonth;
+                    targetDate.setDate(startDate.getDate() + Math.round(i * daysInterval));
+                }
+
+                // Si la date est dans le futur, on arrête
                 if (targetDate > now) break;
 
                 const dateStr = targetDate.toISOString().split('T')[0];
-                // On crée une clé unique stable (convertie en string pour éviter les bugs d'ID)
-                const occurrenceId = `dca-${String(master.id)}-occ-${i}`;
-
-                // --- DOUBLE VÉRIFICATION ANTI-DOUBLON ---
-                const exists = this.transactions.find(t => 
-                    // 1. Soit la référence unique correspond
-                    t.dcaRef === occurrenceId || 
-                    // 2. Soit on a déjà un achat auto pour ce nom EXACT à cette date EXACTE
-                    (t.isAutoDCA && t.name === master.name && t.date === dateStr)
+                
+                // --- LA VÉRIFICATION ANTI-DOUBLON (SIMPLIFIÉE) ---
+                // On cherche s'il existe DÉJÀ une ligne dans le journal qui correspond
+                const exists = this.transactions.some(t => 
+                    t.op === 'Achat' &&            // C'est un achat
+                    t.name === master.name &&      // Du même actif
+                    t.date === dateStr             // À la même date
                 );
 
-                if (!exists) {
-                    console.log(`[DCA] Création de l'échéance ${i+1} pour ${master.name} (${dateStr})`);
-                    
-                    const estimatedPrice = this.currentPrices[master.ticker] || this.currentPrices[master.name] || master.price || 1;
-                    
-                    const newTx = {
-                        id: Date.now() + Math.random(), 
-                        date: dateStr,
-                        op: 'Achat',
-                        name: master.name,
-                        ticker: master.ticker,
-                        account: master.account,
-                        sector: master.sector,
-                        qty: amountPerExec / estimatedPrice,
-                        price: estimatedPrice,
-                        dcaRef: occurrenceId, // Marqueur technique
-                        isAutoDCA: true      // Marqueur visuel pour le journal
-                    };
-
-                    await window.dbService.add('invest_tx', newTx);
-                    this.transactions.push(newTx);
-                    changesMade = true;
+                if (exists) {
+                    // console.log(`Déjà fait : ${master.name} le ${dateStr}`);
+                    continue; // On passe au suivant
                 }
+
+                // --- CRÉATION SI INEXISTANT ---
+                console.log(`[NOUVEAU] Génération DCA : ${master.name} le ${dateStr}`);
+                
+                const estimatedPrice = this.currentPrices[master.ticker] || this.currentPrices[master.name] || master.price || 100;
+                
+                const newTx = {
+                    id: Date.now() + Math.random(), // ID unique
+                    date: dateStr,
+                    op: 'Achat',
+                    name: master.name,
+                    ticker: master.ticker,
+                    account: master.account,
+                    sector: master.sector,
+                    qty: amountPerExec / estimatedPrice,
+                    price: estimatedPrice,
+                    // On ajoute ces tags pour info, mais on ne base plus la vérif dessus
+                    dcaRef: `dca-${master.id}-${i}`, 
+                    isAutoDCA: true
+                };
+
+                await window.dbService.add('invest_tx', newTx);
+                this.transactions.push(newTx);
+                changesMade = true;
             }
         }
 
         if (changesMade) {
-            this.toast("Échéances DCA mises à jour 🔄");
+            this.toast("Journal mis à jour (DCA) ✅");
             this.renderTable();
-        } else {
-            console.log("[DCA] Tout est à jour, aucune ligne générée.");
         }
     },
 
